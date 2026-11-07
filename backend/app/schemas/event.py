@@ -8,11 +8,13 @@ the same thing always has the same spelling (UTC times, canonical IPs, punycode 
 import ipaddress
 import json
 import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
+import idna
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.config import get_settings
@@ -25,6 +27,26 @@ ALLOWED_URL_SCHEMES = {"http", "https", "ftp"}
 MAX_METADATA_DEPTH = 10  # container levels; real metadata is 2-4 levels deep
 _DOMAIN_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 _NUMBER_TEXT = re.compile(r"-?\d+(\.\d+)?")
+
+
+def _contains_nul(value: Any) -> bool:
+    """True if any string (including dict keys) inside nested dicts/lists contains a NUL character.
+
+    PostgreSQL cannot store NUL in text or JSONB columns. Call only after `_exceeds_depth`
+    (which also guards against self-referencing data).
+    """
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            if "\x00" in item:
+                return True
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+    return False
 
 
 def _exceeds_depth(value: Any, limit: int) -> bool:
@@ -48,26 +70,56 @@ def _exceeds_depth(value: Any, limit: int) -> bool:
     return False
 
 
+_NON_ASCII_DOTS = ("。", "．", "｡")  # look like '.', and IDNA would treat them as one
+
+
+def _reject_ip_text(name: str) -> None:
+    try:
+        ipaddress.ip_address(name)
+    except ValueError:
+        return
+    raise ValueError("domain looks like an IP address; use source_ip or destination_ip instead")
+
+
+def canonical_ip(value: str) -> str:
+    """The one spelling of an IPv4/IPv6 address (e.g. 2001:0DB8::1 -> 2001:db8::1).
+
+    IPv6 scope identifiers (fe80::1%eth0) are refused: they are local to one machine, split
+    one address into several indicators, and can be arbitrarily long. Raises ValueError with a
+    message that does NOT repeat the input.
+    """
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        raise ValueError("not a valid IPv4 or IPv6 address") from None
+    if getattr(address, "scope_id", None):
+        raise ValueError("IPv6 scope identifiers (the %... suffix) are not accepted")
+    return str(address)
+
+
 def normalise_domain(value: str) -> str:
     """Return the canonical form of a hostname: lower case, no trailing dot, punycode (xn--).
 
-    Unicode lookalikes such as a Cyrillic 'а' therefore become visibly different from the
-    Latin name. Raises ValueError for anything that is not a valid hostname. Also used for
+    Uses strict IDNA 2008 (the `idna` package) with NO silent character mapping. The old
+    standard-library codec (IDNA 2003) quietly deleted or folded characters, so a lookalike such
+    as 'pay<soft hyphen>pal.com' became the real 'paypal.com' and 'faß.de' became 'fass.de'.
+    Now such names are rejected or kept distinct, and a Cyrillic 'а' becomes a visibly different
+    'xn--' name. Raises ValueError for anything that is not a valid hostname. Also used for
     the `domain` filter of the list API, so filters and stored values always agree.
     """
     name = value[:-1] if value.endswith(".") else value
     if not name:
         raise ValueError("domain must not be empty")
+    if any(dot in name for dot in _NON_ASCII_DOTS):
+        raise ValueError("domain contains a lookalike of the '.' character")
+    _reject_ip_text(name)
+    # lower() keeps 'ß' (casefold() would turn it into 'ss'); NFC gives one spelling per character.
+    candidate = unicodedata.normalize("NFC", name.lower())
     try:
-        ipaddress.ip_address(name)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("domain looks like an IP address; use source_ip or destination_ip instead")
-    try:
-        ascii_name = name.encode("idna").decode("ascii").lower()
-    except UnicodeError:
+        ascii_name = idna.encode(candidate).decode("ascii").lower()
+    except Exception:  # noqa: BLE001 - idna raises several types; every one means "not a valid hostname"
         raise ValueError("domain is not a valid (internationalised) hostname") from None
+    _reject_ip_text(ascii_name)  # e.g. fullwidth digits can no longer smuggle an IP in as a domain
     if len(ascii_name) > MAX_DOMAIN_LENGTH:
         raise ValueError(f"domain is longer than {MAX_DOMAIN_LENGTH} characters")
     if not all(_DOMAIN_LABEL.fullmatch(label) for label in ascii_name.split(".")):
@@ -134,17 +186,15 @@ class EventIn(BaseModel):
     def _timestamp_must_have_a_timezone(cls, value: datetime) -> datetime:
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("occurred_at must include a timezone (for example 'Z' or '+05:30')")
-        return value.astimezone(timezone.utc)
+        try:
+            return value.astimezone(timezone.utc)
+        except OverflowError:  # e.g. 0001-01-01T00:00:00+05:30 would be before year 1 in UTC
+            raise ValueError("occurred_at is outside the supported date range") from None
 
     @field_validator("source_ip", "destination_ip")
     @classmethod
     def _canonical_ip(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        try:
-            return str(ipaddress.ip_address(value))
-        except ValueError:  # Python's own message repeats the input, so replace it
-            raise ValueError("not a valid IPv4 or IPv6 address") from None
+        return None if value is None else canonical_ip(value)
 
     @field_validator("domain")
     @classmethod
@@ -164,6 +214,12 @@ class EventIn(BaseModel):
     @field_validator("description")
     @classmethod
     def _description_not_blank(cls, value: str) -> str:
+        if "\x00" in value:
+            raise ValueError("description must not contain NUL characters")  # PostgreSQL cannot store them
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError:  # a lone surrogate such as \ud800
+            raise ValueError("description contains characters that cannot be stored") from None
         stripped = value.strip()
         if not stripped:
             raise ValueError("description must not be blank")
@@ -174,6 +230,8 @@ class EventIn(BaseModel):
     def _metadata_is_small_plain_json(cls, value: dict[str, Any]) -> dict[str, Any]:
         if _exceeds_depth(value, MAX_METADATA_DEPTH):
             raise ValueError(f"metadata is nested deeper than {MAX_METADATA_DEPTH} levels")
+        if _contains_nul(value):
+            raise ValueError("metadata must not contain NUL characters")  # PostgreSQL cannot store them
         try:
             size = len(json.dumps(value, ensure_ascii=False, allow_nan=False,
                                   separators=(",", ":")).encode("utf-8"))

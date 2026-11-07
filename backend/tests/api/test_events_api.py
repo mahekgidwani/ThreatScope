@@ -175,3 +175,45 @@ def test_request_log_has_method_path_status_and_never_the_key_or_query(client, c
     assert any(line.startswith("POST /api/v1/events 201 ") for line in lines)
     assert any(line.startswith("GET /api/v1/events 200 ") for line in lines)
     assert any(line.startswith("POST /api/v1/events 401 ") for line in lines)
+
+
+# ---- review fixes: input the database cannot store must be a 422, never a 500 --
+
+@pytest.mark.parametrize("over", [
+    dict(description="a\x00b"), dict(metadata={"k": "a\x00b"}), dict(metadata={"a\x00": 1}),
+    dict(metadata={"k": [{"deep": "\x00"}]}),
+    dict(domain="pay­pal.com"), dict(domain="１２７.0.0.1"),
+    dict(occurred_at="0001-01-01T00:00:00+05:30"), dict(occurred_at="9999-12-31T23:30:00-01:00"),
+    dict(source_ip="fe80::1%eth0"), dict(destination_ip="fe80::1%" + "a" * 60),
+], ids=["nul-description", "nul-meta-value", "nul-meta-key", "nul-meta-nested", "soft-hyphen-domain",
+        "fullwidth-ip-domain", "year-1-overflow", "year-9999-overflow", "ipv6-scope", "ipv6-long-scope"])
+def test_values_postgresql_cannot_store_are_422_not_500(client, over):
+    response = client.post(URL, json=body(**over), headers=AUTH)
+    assert response.status_code == 422, response.text
+    assert error_of(response)["code"] == "validation_error"
+    assert client.get(URL).json()["total"] == 0
+
+
+def test_a_lookalike_domain_is_never_stored_as_the_real_one(client):
+    assert client.post(URL, json=body(domain="pay­pal.com"), headers=AUTH).status_code == 422
+    stored = client.post(URL, json=body(domain="paypal.com"), headers=AUTH).json()
+    assert stored["domain"] == "paypal.com" and stored["indicators"][0]["sighting_count"] == 1
+
+
+def test_sharp_s_domain_is_stored_under_its_own_name(client):
+    data = client.post(URL, json=body(domain="faß.de"), headers=AUTH).json()
+    assert data["domain"] == "xn--fa-hia.de"
+
+
+def test_the_earliest_and_latest_representable_timestamps_round_trip(client):
+    for sent, expected in (("0001-01-01T05:30:00+05:30", "0001-01-01T00:00:00Z"),
+                           ("9999-12-31T23:59:59Z", "9999-12-31T23:59:59Z")):
+        created = client.post(URL, json=body(occurred_at=sent), headers=AUTH)
+        assert created.status_code == 201, created.text
+        assert client.get(f"{URL}/{created.json()['id']}").json()["occurred_at"] == expected
+
+
+def test_text_with_ordinary_control_characters_round_trips(client):
+    created = client.post(URL, json=body(description="line1\nline2\ttab", metadata={"k": "a\nb\u001f"}),
+                          headers=AUTH).json()
+    assert client.get(f"{URL}/{created['id']}").json()["description"] == "line1\nline2\ttab"

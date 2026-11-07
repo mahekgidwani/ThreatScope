@@ -6,11 +6,10 @@
   3. score it, link the indicators, commit.
 If anything fails, everything is rolled back.
 """
-import ipaddress
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select, update, func
 from sqlalchemy.exc import IntegrityError
@@ -20,9 +19,9 @@ from app.enums import IndicatorType, Severity, Source
 from app.errors import DuplicateEventError, InvalidFilterError, NotFoundError
 from app.models import Event, EventIndicator, Indicator
 from app.models.types import utc_now
-from app.schemas.event import EventIn, normalise_domain
+from app.schemas.event import EventIn, canonical_ip, normalise_domain
 from app.services.indicator_extractor import extract_indicators
-from app.services.paging import check_paging
+from app.services.paging import check_paging, check_text_filter
 from app.services.risk_scoring import compute_risk
 
 logger = logging.getLogger(__name__)
@@ -141,10 +140,10 @@ def _conditions(f: EventFilters) -> list:
     except ValueError:
         raise InvalidFilterError("unknown source or severity") from None
     if f.event_type is not None:
-        conditions.append(Event.event_type == f.event_type)          # exact match, never LIKE
+        conditions.append(Event.event_type == check_text_filter("event_type", f.event_type))  # exact, never LIKE
     if f.source_ip is not None:
         try:
-            conditions.append(Event.source_ip == str(ipaddress.ip_address(f.source_ip)))
+            conditions.append(Event.source_ip == canonical_ip(f.source_ip))   # same rules as ingestion
         except ValueError:
             raise InvalidFilterError("source_ip is not a valid IP address") from None
     if f.domain is not None:
@@ -152,16 +151,27 @@ def _conditions(f: EventFilters) -> list:
             conditions.append(Event.domain == normalise_domain(f.domain))   # same rules as ingestion
         except ValueError:
             raise InvalidFilterError("domain is not a valid hostname") from None
-    for name, value in (("start_time", f.start_time), ("end_time", f.end_time)):
-        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
-            raise InvalidFilterError(f"{name} must include a timezone")
-    if f.start_time is not None and f.end_time is not None and f.start_time > f.end_time:
+    start = _utc_filter_time("start_time", f.start_time)
+    end = _utc_filter_time("end_time", f.end_time)
+    if start is not None and end is not None and start > end:
         raise InvalidFilterError("start_time must not be after end_time")
-    if f.start_time is not None:
-        conditions.append(Event.occurred_at >= f.start_time)
-    if f.end_time is not None:
-        conditions.append(Event.occurred_at < f.end_time)
+    if start is not None:
+        conditions.append(Event.occurred_at >= start)
+    if end is not None:
+        conditions.append(Event.occurred_at < end)
     return conditions
+
+
+def _utc_filter_time(name: str, value: datetime | None) -> datetime | None:
+    """A filter time as UTC. Needs a timezone; refuses values that fall outside years 1-9999 in UTC."""
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise InvalidFilterError(f"{name} must include a timezone")
+    try:
+        return value.astimezone(timezone.utc)
+    except OverflowError:
+        raise InvalidFilterError(f"{name} is outside the supported date range") from None
 
 
 def list_events(db: Session, filters: EventFilters, limit: int, offset: int) -> tuple[list[Event], int]:

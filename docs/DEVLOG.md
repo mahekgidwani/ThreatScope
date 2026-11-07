@@ -30,6 +30,35 @@ Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL majo
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
 
+### Final independent review and fix pass (done)
+An independent reviewer (a fresh agent that had never seen the code) read the whole branch (9 commits), re-ran the suite
+(575 passed) and probed the live stack read-only. Verdict: "merge after fixes"; none of the five Review Focus items failed.
+Fixed (one pass, tests written first - 87 new tests failed before the fix, all pass after; suite 575 -> 685):
+1. **Lookalike domains were merged into the real domain.** Python's built-in `idna` codec (IDNA 2003) silently deleted or folded
+   characters: `pay<soft hyphen>pal.com` became `paypal.com`, `faß.de` became `fass.de`, fullwidth digits `１２７.0.0.1` slipped through
+   the "no IP in a domain" rule. Now the strict IDNA 2008 `idna` package is used (added to `requirements.txt`) with no silent
+   mapping: invisible/zero-width characters, Roman-numeral and fullwidth lookalikes, dot lookalikes (`。`) and bad punycode are
+   rejected with 422; `ß` stays distinct (`xn--fa-hia.de`); real international names still work (`пример.рф`).
+2. **NUL characters caused a 500 on PostgreSQL.** PostgreSQL cannot store NUL in text/JSONB, SQLite can, so the tests could not
+   see it. NUL (and lone surrogates) in `description`, in any metadata key/value, and in the `event_type` / indicator `value`
+   filters are now a 422 / `invalid_filter`. Other control characters (newline, tab) are still allowed and round-trip.
+3. **Huge `offset` (over 2^63-1) caused a 500.** Now a 422; the largest valid offset (2^63-1) returns an empty page.
+4. **Timestamps whose UTC value falls before year 1 or after year 9999** (for example `0001-01-01T00:00:00+05:30`) caused a 500 on
+   POST and on the time filters. Now a 422; the earliest/latest representable timestamps are accepted and round-trip.
+5. **IPv6 scope IDs** (`fe80::1%eth0`) were accepted, split one address into several indicators and, when long, overflowed
+   `varchar(45)` -> 500. Now rejected in the schema and the filter (shared `canonical_ip` helper).
+6. **SQL parameters appeared in error logs** (event description/metadata of a failed insert). Engines now use `hide_parameters=True`.
+Corrected in the docs only: the claim "no query strings in logs" (uvicorn's own access line still prints them) and
+`RISK_SCORING.md` ("earlier" means stored earlier, not earlier `occurred_at`).
+Deferred minors (not fixed on purpose): list filters `start_time`/`end_time` still accept Unix numbers (ingestion refuses
+them); the indicator `value` filter is not normalised like the event `domain` filter (filter by the stored punycode/canonical
+form); a request body is parsed before the API-key check and there is no body-size cap (localhost only); uvicorn's access
+log prints query strings (`--no-access-log` would silence it).
+Not changed (reviewer's question): `POSTGRES_PASSWORD` may still be `change-me`; the spec only requires placeholder rejection for
+the API key and the database is bound to localhost.
+Live proof after the fix (rebuilt image, backend restarted, database untouched): all 15 attack inputs returned 422 (none 500),
+the rejected POSTs stored nothing (events total still 2), and the backend log held no server errors.
+
 ### Task 10 - Documentation and full verification (done)
 Files: `README.md` (setup, usage, tests, security notes, troubleshooting), `docs/RISK_SCORING.md` (the scoring rule with worked
 examples), this log. Nothing in the application code changed in this task.
@@ -81,7 +110,9 @@ Endpoints: `POST /api/v1/events` (needs header `X-API-Key`), `GET /api/v1/events
 call a service, and shape the response.
 Security: the key comes from `INGEST_API_KEY`, is compared with `hmac.compare_digest`, and is never logged or returned. Reads
 are open on purpose for the local MVP (ports are published on 127.0.0.1 only). The request log line is
-`METHOD /path STATUS duration` - no query string, headers or body. At startup the app loads the settings (a missing, weak or
+`METHOD /path STATUS duration` - no query string, headers or body. (Correction after the final review: uvicorn's own,
+separate access-log line still prints the query string. No secret is sent in a query string by design, so the risk is low;
+switching it off with `--no-access-log` is listed under deferred minors.) At startup the app loads the settings (a missing, weak or
 placeholder key stops it), turns on secret-redacting logging and creates missing tables.
 Errors: every error has the shape `{"error": {"code", "message", "details"}}`: 401 unauthorized, 404 not_found (also unknown
 routes), 405, 409 duplicate_event (with the existing id), 422 validation_error / invalid_filter, 503 database_error (database

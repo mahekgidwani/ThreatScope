@@ -34,6 +34,10 @@ Why these parts:
 
 The event being scored is never counted as one of its own earlier sightings.
 
+"Earlier" means **stored earlier** (ingested before), not "has an earlier `occurred_at`". If an adapter loads old
+logs out of order, an older event can therefore receive a bigger repeat bonus than a newer one. Revisit this when
+correlation arrives in Phase 4.
+
 | Event number for the same indicator | Earlier events | Bonus |
 |---|---|---|
 | 1st | 0 | +0 |

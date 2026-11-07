@@ -318,3 +318,37 @@ def test_list_incidents_empty_then_filtered_by_status(session):
         list_incidents(session, "bogus", 50, 0)
     with pytest.raises(InvalidFilterError):
         list_incidents(session, None, 0, 0)
+
+
+# ---- review fixes: inputs PostgreSQL cannot represent --------------------------
+
+@pytest.mark.parametrize("bad", [
+    dict(event_type="\x00"), dict(event_type="a\x00b"),
+    dict(source_ip="fe80::1%eth0"), dict(source_ip="fe80::1%" + "a" * 60),
+    dict(start_time=datetime(1, 1, 1, tzinfo=timezone(timedelta(hours=5, minutes=30)))),     # overflows when made UTC
+    dict(end_time=datetime(9999, 12, 31, 23, 30, tzinfo=timezone(timedelta(hours=-1)))),
+], ids=["nul", "nul-inside", "ipv6-scope", "ipv6-long-scope", "year-1-overflow", "year-9999-overflow"])
+def test_filters_the_database_cannot_represent_are_invalid_filters(session, bad):
+    with pytest.raises(InvalidFilterError):
+        list_events(session, EventFilters(**bad), 50, 0)
+
+
+def test_the_biggest_offset_is_accepted_and_just_returns_nothing(session):
+    create_event(session, payload())
+    assert list_events(session, EventFilters(), 50, 2**63 - 1) == ([], 1)
+    with pytest.raises(InvalidFilterError):
+        list_events(session, EventFilters(), 50, 2**63)
+
+
+def test_indicator_and_incident_paging_has_the_same_offset_bound(session):
+    assert list_indicators(session, None, None, 50, 2**63 - 1) == ([], 0)
+    assert list_incidents(session, None, 50, 2**63 - 1) == ([], 0)
+    with pytest.raises(InvalidFilterError):
+        list_indicators(session, None, None, 50, 2**63)
+    with pytest.raises(InvalidFilterError):
+        list_incidents(session, None, 50, 2**63)
+
+
+def test_indicator_value_filter_rejects_nul(session):
+    with pytest.raises(InvalidFilterError):
+        list_indicators(session, None, "a\x00b", 50, 0)

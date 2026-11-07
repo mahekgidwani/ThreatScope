@@ -10,7 +10,7 @@ from app.enums import Severity, Source
 from app.schemas.common import Page
 from app.schemas.event import EventIn, EventOut
 from app.services.event_service import EventFilters, create_event, get_event, list_events
-from app.services.paging import DEFAULT_LIMIT, MAX_LIMIT
+from app.services.paging import DEFAULT_LIMIT, MAX_LIMIT, MAX_OFFSET
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
@@ -31,7 +31,7 @@ def get_events(
     start_time: datetime | None = Query(None, description="Inclusive. Must include a timezone."),
     end_time: datetime | None = Query(None, description="Exclusive. Must include a timezone."),
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
 ):
     filters = EventFilters(source=source, event_type=event_type, severity=severity, source_ip=source_ip,

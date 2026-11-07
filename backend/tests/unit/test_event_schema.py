@@ -234,3 +234,66 @@ def test_metadata_self_referencing_structure_is_rejected_not_looped():
 @pytest.mark.parametrize("meta", [None, [], "text", 5])
 def test_metadata_must_be_an_object(meta):
     rejected(metadata=meta)
+
+
+# ---- review fixes: lookalike domains -------------------------------------------
+
+@pytest.mark.parametrize("value", [
+    "pay­pal.com",          # soft hyphen: invisible, would silently become paypal.com
+    "pay​pal.com",          # zero-width space
+    "ex‍ample.com", "ex‌ample.com",   # zero-width joiner / non-joiner
+    "Ⅰ.com",                # Roman numeral one: used to fold to i.com
+    "１２７.0.0.1",  # fullwidth digits: used to smuggle an IP into the domain field
+    "example。com", "example．com", "example｡com",   # dot lookalikes
+    "xn--zz.example",            # not valid punycode
+    "ex\x00ample.com",           # NUL
+])
+def test_invisible_or_folding_characters_are_rejected_not_merged_into_another_domain(value):
+    rejected(domain=value)
+
+
+def test_sharp_s_is_kept_not_folded_into_ss():
+    assert make(domain="faß.de").domain == "xn--fa-hia.de"
+    assert make(domain="faß.de").domain != make(domain="fass.de").domain
+
+
+def test_valid_international_names_still_work_and_case_is_ignored():
+    assert make(domain="пример.рф").domain == "xn--e1afmkfd.xn--p1ai"
+    assert make(domain="BÜCHER.example").domain == make(domain="bücher.example").domain == "xn--bcher-kva.example"
+
+
+# ---- review fixes: text the database cannot store ------------------------------
+
+@pytest.mark.parametrize("meta", [
+    {"k": "a\x00b"}, {"a\x00": 1}, {"k": ["x", {"deep": "\x00"}]}, {"k": {"n": ["\x00"]}},
+], ids=["value", "key", "in-list", "nested"])
+def test_nul_characters_in_metadata_are_rejected(meta):
+    rejected(metadata=meta)
+
+
+@pytest.mark.parametrize("text", ["a\x00b", "\x00", "bad\ud800surrogate"])
+def test_description_with_nul_or_a_lone_surrogate_is_rejected(text):
+    rejected(description=text)
+
+
+def test_ordinary_control_characters_are_still_allowed_in_text():
+    ev = make(description="line one\nline two\ttabbed", metadata={"k": "a\nb\t\x1f"})
+    assert ev.description == "line one\nline two\ttabbed"
+
+
+# ---- review fixes: values PostgreSQL cannot represent --------------------------
+
+@pytest.mark.parametrize("value", ["0001-01-01T00:00:00+05:30", "9999-12-31T23:30:00-01:00"])
+def test_timestamps_that_overflow_utc_are_a_validation_error_not_a_crash(value):
+    rejected(occurred_at=value)
+
+
+def test_the_extreme_representable_timestamps_are_accepted():
+    assert make(occurred_at="0001-01-01T05:30:00+05:30").occurred_at.year == 1
+    assert make(occurred_at="9999-12-31T23:59:59Z").occurred_at.year == 9999
+
+
+@pytest.mark.parametrize("field", ["source_ip", "destination_ip"])
+@pytest.mark.parametrize("value", ["fe80::1%eth0", "fe80::1%1", "fe80::1%" + "a" * 60])
+def test_ipv6_scope_identifiers_are_rejected(field, value):
+    rejected(**{field: value})

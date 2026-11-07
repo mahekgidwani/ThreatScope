@@ -6,7 +6,7 @@ from app.enums import IndicatorType
 from app.schemas.common import Page
 from app.schemas.indicator import IndicatorOut
 from app.services.indicator_service import list_indicators
-from app.services.paging import DEFAULT_LIMIT, MAX_LIMIT
+from app.services.paging import DEFAULT_LIMIT, MAX_LIMIT, MAX_OFFSET
 
 router = APIRouter(prefix="/api/v1/indicators", tags=["indicators"])
 
@@ -16,7 +16,7 @@ def get_indicators(
     indicator_type: IndicatorType | None = Query(None, alias="type"),
     value: str | None = None,
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
 ):
     items, total = list_indicators(db, indicator_type, value, limit, offset)

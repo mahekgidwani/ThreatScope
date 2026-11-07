@@ -6,7 +6,7 @@ from app.enums import IncidentStatus
 from app.schemas.common import Page
 from app.schemas.incident import IncidentOut
 from app.services.incident_service import list_incidents
-from app.services.paging import DEFAULT_LIMIT, MAX_LIMIT
+from app.services.paging import DEFAULT_LIMIT, MAX_LIMIT, MAX_OFFSET
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
 def get_incidents(
     status: IncidentStatus | None = None,
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
 ):
     items, total = list_incidents(db, status, limit, offset)

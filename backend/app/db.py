@@ -36,7 +36,9 @@ class Base(DeclarativeBase):
 def make_engine(url: str | URL) -> Engine:
     """Create an engine. PostgreSQL gets a short connect timeout so a dead database fails fast."""
     url = make_url(url) if isinstance(url, str) else url
-    options: dict = {"pool_pre_ping": True}
+    # hide_parameters: a failed statement's error text must not contain the event data (description,
+    # metadata, ...) that was being stored.
+    options: dict = {"pool_pre_ping": True, "hide_parameters": True}
     if url.get_backend_name() == "postgresql":
         options["connect_args"] = {"connect_timeout": 2}
     return create_engine(url, **options)

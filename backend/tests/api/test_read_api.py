@@ -192,3 +192,39 @@ def test_interactive_docs_and_openapi_are_available(client):
     assert client.get("/docs").status_code == 200
     paths = client.get("/openapi.json").json()["paths"]
     assert {"/api/v1/events", "/api/v1/events/{event_id}", "/api/v1/indicators", "/api/v1/incidents"} <= set(paths)
+
+
+# ---- review fixes: hostile query values must be a 422, never a 500 -------------
+
+HUGE = 10**20
+BIGGEST = 2**63 - 1
+
+
+@pytest.mark.parametrize("path", ["/api/v1/events", "/api/v1/indicators", "/api/v1/incidents"])
+def test_offset_beyond_the_database_integer_range_is_422(client, path):
+    for offset in (HUGE, 2**63):
+        response = client.get(path, params={"offset": offset})
+        assert response.status_code == 422, (path, offset, response.text)
+        assert error_code(response) == "validation_error"
+
+
+@pytest.mark.parametrize("path", ["/api/v1/events", "/api/v1/indicators", "/api/v1/incidents"])
+def test_the_biggest_valid_offset_is_an_empty_page(client, path):
+    response = client.get(path, params={"offset": BIGGEST})
+    assert response.status_code == 200 and response.json()["items"] == []
+
+
+@pytest.mark.parametrize("params", [
+    {"event_type": "\x00"}, {"event_type": "a\x00b"},
+    {"source_ip": "fe80::1%eth0"},
+    {"start_time": "0001-01-01T00:00:00+05:30"}, {"end_time": "9999-12-31T23:30:00-01:00"},
+], ids=["nul", "nul-inside", "ipv6-scope", "start-overflow", "end-overflow"])
+def test_event_filters_the_database_cannot_represent_are_422(client, seeded, params):
+    response = client.get(URL, params=params)
+    assert response.status_code == 422, response.text
+    assert error_code(response) == "invalid_filter"
+
+
+def test_indicator_value_filter_with_nul_is_422(client):
+    response = client.get("/api/v1/indicators", params={"value": "\x00"})
+    assert response.status_code == 422 and error_code(response) == "invalid_filter"

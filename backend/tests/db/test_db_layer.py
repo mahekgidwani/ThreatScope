@@ -40,6 +40,29 @@ def test_make_engine_sets_connect_timeout_for_postgres_only(monkeypatch):
     assert "connect_args" not in captured["sqlite"]
 
 
+def test_engines_hide_sql_parameters_so_event_data_never_reaches_error_messages(monkeypatch):
+    captured = {}
+
+    def fake_create_engine(url, **kwargs):
+        captured[url.get_backend_name()] = kwargs
+        return object()
+
+    monkeypatch.setattr(db, "create_engine", fake_create_engine)
+    make_engine("postgresql+psycopg://u:p@h/d")
+    make_engine("sqlite://")
+    assert captured["postgresql"]["hide_parameters"] is True
+    assert captured["sqlite"]["hide_parameters"] is True
+
+
+def test_a_failing_statement_does_not_put_its_parameters_in_the_error_text():
+    from sqlalchemy import text
+    engine = make_engine("sqlite://")
+    with engine.connect() as connection, pytest.raises(Exception) as caught:
+        connection.execute(text("SELECT * FROM table_that_does_not_exist WHERE x = :v"), {"v": "SECRET-PARAMETER-VALUE"})
+    assert "SECRET-PARAMETER-VALUE" not in str(caught.value)
+    assert "table_that_does_not_exist" in str(caught.value)      # the statement itself is still reported
+
+
 def test_get_engine_is_cached_and_built_from_settings():
     get_engine.cache_clear()
     try:

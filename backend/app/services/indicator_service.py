@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.enums import IndicatorType
 from app.errors import InvalidFilterError
 from app.models import Indicator
-from app.services.paging import check_paging
+from app.services.paging import check_paging, check_text_filter
 
 
 def list_indicators(db: Session, type: IndicatorType | str | None, value: str | None,
@@ -18,7 +18,7 @@ def list_indicators(db: Session, type: IndicatorType | str | None, value: str | 
         except ValueError:
             raise InvalidFilterError("unknown indicator type") from None
     if value is not None:
-        conditions.append(Indicator.value == value)
+        conditions.append(Indicator.value == check_text_filter("value", value))
     total = db.scalar(select(func.count()).select_from(Indicator).where(*conditions))
     page = db.scalars(select(Indicator).where(*conditions)
                       .order_by(Indicator.last_seen.desc(), Indicator.id.desc())
