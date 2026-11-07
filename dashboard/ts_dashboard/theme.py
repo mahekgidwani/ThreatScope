@@ -113,6 +113,9 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible, [tabindex]
 .ts-dl dd { margin: 0; font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .ts-dl-row { grid-template-columns: 1fr; gap: 2px; } }
 
+.ts-tag { display: inline-block; padding: 0 8px; border-radius: 6px; font-size: 11.5px; color: var(--ts-accent);
+  border: 1px solid color-mix(in srgb, var(--ts-accent) 45%, transparent); margin-left: 4px; white-space: nowrap; }
+
 /* states */
 .ts-state { display: flex; gap: 14px; align-items: flex-start; padding: 18px 4px; }
 .ts-state svg { flex: none; width: 22px; height: 22px; margin-top: 2px; }

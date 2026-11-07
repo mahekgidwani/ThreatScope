@@ -1,6 +1,6 @@
 # ThreatScope Phase 4: dashboard
 
-Streamlit dashboard that reads real data from the FastAPI backend. Done: Task 1 (foundation), Task 2 (shell, theme, Overview, System status), Task 3 (Events Explorer).
+Streamlit dashboard that reads real data from the FastAPI backend. Done: Task 1 (foundation), Task 2 (shell, theme, Overview, System status), Task 3 (Events Explorer), Task 4 (Indicators and Correlation).
 
 ```
 Dashboard (Streamlit, Windows host) -> ts_dashboard.api_client -> FastAPI (:8000) -> services -> PostgreSQL
@@ -88,3 +88,18 @@ docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend p
 - The table is the same HTML table as the Overview (escaped, severity badges). Streamlit's canvas data grid was tried and dropped: it drew in a fallback serif
   font and could not show severity badges.
 - Opening `/events` directly on a freshly started server can flash "Page not found" once (Streamlit registers pages when the app first runs). Open the root URL.
+
+## Task 4: Indicator Explorer and Correlation (no backend change)
+
+- **Indicators**: filter by type and exact value; sort by most recently seen (the API order), most sightings, or newest first seen. The last two are not API orders,
+  so they read up to 1,000 indicators and sort here; the page says so when there are more. Selecting an indicator shows its fields and the events that mention it.
+  The page states that an indicator is an observation, not a verdict.
+- **Correlation** reads the newest 1,000 events once (every event already carries its extracted indicators) and groups them: an indicator in 2+ events is a
+  *shared indicator*. Nothing is scored or guessed. Table columns: type, value, events, sources (with a `cross-source` tag), highest severity, max risk, latest time.
+  Filters: indicator type, minimum events, only indicators seen by more than one source. The selected indicator gets a relationship graph (indicators left, events
+  right, one line per stored membership, events coloured by severity, other shared indicators of the same events included so chains are visible) and the list of
+  events with their IDs.
+- **Why no API change**: the API has no events-by-indicator filter for URLs and hashes, but each event embeds its indicators, so grouping in the dashboard is exact
+  for the events it reads. The limit is the scan size: with more than 1,000 events, older ones are not searched, and every page says "searched the newest N of M".
+  If the project outgrows that, the smallest fix is an `indicator_id` filter on `GET /api/v1/events` (one join on `event_indicators`, read-only).
+- Tests use the in-memory fake API; the graph edges are tested to equal the stored memberships exactly (nothing invented).

@@ -195,3 +195,39 @@ def event_indicators_table(event: Event) -> str:
     if not event.indicators:
         return empty_state("No indicators", "No IP, domain, URL or hash was extracted from this event.")
     return indicators_table(event.indicators)
+
+
+# ---- indicators and correlation -------------------------------------------------------------
+
+def indicators_full_table(indicators: Sequence[Indicator]) -> str:
+    rows = [[cell_nowrap(INDICATOR_LABELS.get(i.type, i.type)), cell_mono(i.value, 60), f"<strong>{i.sighting_count}</strong>",
+             f'<span class="ts-nowrap ts-muted">{escape(fmt_time(i.first_seen))}</span>',
+             f'<span class="ts-nowrap ts-muted">{escape(fmt_time(i.last_seen))}</span>'] for i in indicators]
+    return table([("Type", False), ("Value", False), ("Sightings", True), ("First seen", False), ("Last seen", False)], rows)
+
+
+def indicator_detail(indicator: Indicator) -> str:
+    return definition_list([
+        ("Type", cell_text(INDICATOR_LABELS.get(indicator.type, indicator.type))),
+        ("Value", cell_mono(indicator.value)),
+        ("Sightings", f"<strong>{indicator.sighting_count}</strong> <span class=\"ts-muted\">(events that mentioned it, counted by the backend)</span>"),
+        ("First seen", cell_text(fmt_time(indicator.first_seen))),
+        ("Last seen", cell_text(fmt_time(indicator.last_seen))),
+    ])
+
+
+def tag(text: str) -> str:
+    return f'<span class="ts-tag">{escape(text)}</span>'
+
+
+def clusters_table(clusters: Sequence) -> str:
+    """`clusters`: ts_dashboard.correlation.Cluster objects."""
+    rows = []
+    for k in clusters:
+        sources = ", ".join(SOURCE_LABELS.get(s, s) for s in k.sources)
+        rows.append([cell_nowrap(INDICATOR_LABELS.get(k.indicator.type, k.indicator.type)), cell_mono(k.indicator.value, 44),
+                     f"<strong>{k.count}</strong>", cell_text(sources) + (" " + tag("cross-source") if k.cross_source else ""),
+                     severity_badge(k.max_severity), f"<strong>{k.max_risk}</strong>",
+                     f'<span class="ts-nowrap ts-muted">{escape(fmt_time_short(k.last_seen))}</span>'])
+    return table([("Type", False), ("Shared indicator", False), ("Events", True), ("Sources", False), ("Highest severity", False),
+                  ("Max risk", True), ("Latest (UTC)", False)], rows)

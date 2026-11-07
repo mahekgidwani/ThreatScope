@@ -1,6 +1,7 @@
 """Plotly figures for the dashboard. All colours come from `theme`; all data comes from the caller."""
 import plotly.graph_objects as go
 
+from ts_dashboard.correlation import Graph
 from ts_dashboard.overview import Trend
 from ts_dashboard.models import SEVERITIES
 from ts_dashboard.theme import COLORS, FONT_SANS, SEVERITY_COLOURS, SEVERITY_LABELS, SOURCE_LABELS
@@ -59,3 +60,32 @@ def source_figure(counts: dict[str, int]) -> go.Figure:
     order = sorted(counts, key=lambda s: (-counts[s], s))
     return _horizontal_bars([SOURCE_LABELS.get(s, s) for s in order], [counts[s] for s in order],
                             [COLORS["accent_muted"]] * len(order), HEIGHT)
+
+
+def graph_figure(graph: Graph) -> go.Figure:
+    """Indicators (diamonds, left) joined by a line to the events (circles, right) that mention them."""
+    position = {n.key: (n.x, n.y) for n in graph.nodes}
+    edge_x: list[float | None] = []
+    edge_y: list[float | None] = []
+    for a, b in graph.edges:
+        edge_x += [position[a][0], position[b][0], None]
+        edge_y += [position[a][1], position[b][1], None]
+    fig = go.Figure(go.Scatter(x=edge_x, y=edge_y, mode="lines", line=dict(color="rgba(154,169,192,0.40)", width=1.4),
+                               hoverinfo="skip", showlegend=False))
+    indicators = [n for n in graph.nodes if n.kind == "indicator"]
+    fig.add_scatter(x=[n.x for n in indicators], y=[n.y for n in indicators], mode="markers+text", name="Shared indicator",
+                    text=[n.label for n in indicators], textposition="middle left", textfont=dict(color=COLORS["text"], size=12),
+                    marker=dict(symbol="diamond", size=15, color=COLORS["accent"]), hovertext=[n.hover for n in indicators],
+                    hovertemplate="%{hovertext}<extra></extra>")
+    for severity in SEVERITIES[::-1]:
+        group = [n for n in graph.nodes if n.kind == "event" and n.severity == severity]
+        if group:
+            fig.add_scatter(x=[n.x for n in group], y=[n.y for n in group], mode="markers+text", name=f"Event · {SEVERITY_LABELS[severity]}",
+                            text=[n.label for n in group], textposition="middle right", textfont=dict(color=COLORS["muted"], size=11),
+                            marker=dict(symbol="circle", size=13, color=SEVERITY_COLOURS[severity]),
+                            hovertext=[n.hover for n in group], hovertemplate="%{hovertext}<extra></extra>")
+    rows = max(sum(1 for n in graph.nodes if n.kind == "indicator"), sum(1 for n in graph.nodes if n.kind == "event"))
+    fig.update_xaxes(visible=False, range=[-1.05, 1.45])
+    fig.update_yaxes(visible=False, range=[-0.08, 1.08])
+    fig.update_layout(legend=dict(orientation="h", y=-0.02, yanchor="top", x=0, font=dict(size=12)))
+    return _base(fig, height=max(300, 36 * rows + 90))

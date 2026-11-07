@@ -48,3 +48,19 @@ def test_figures_are_plain_serialisable_json_and_transparent():
     fig = charts.source_figure({"domain": 1})
     json.loads(fig.to_json())
     assert fig.layout.paper_bgcolor == "rgba(0,0,0,0)" and charts.CHART_CONFIG["displayModeBar"] is False
+
+
+def test_graph_figure_draws_one_line_per_membership_and_colours_events_by_severity():
+    from tests.fake_backend import indicator
+    from ts_dashboard.correlation import build_graph, correlate
+    ip = indicator(1, "ip", "1.2.3.4")
+    clusters = correlate([Event.model_validate(event(1, severity="high", indicators=[ip])),
+                          Event.model_validate(event(2, severity="critical", indicators=[ip]))])
+    graph = build_graph(clusters[0], clusters)
+    fig = charts.graph_figure(graph)
+    lines = fig.data[0]
+    assert len([v for v in lines.x if v is not None]) == 2 * len(graph.edges) and lines.mode == "lines"
+    names = {t.name: t.marker.color for t in fig.data[1:]}
+    assert names == {"Shared indicator": COLORS["accent"], "Event · Critical": SEVERITY_COLOURS["critical"], "Event · High": SEVERITY_COLOURS["high"]}
+    assert fig.data[1].marker.symbol == "diamond" and fig.layout.xaxis.visible is False
+    assert fig.layout.height >= 300

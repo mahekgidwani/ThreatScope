@@ -13,14 +13,6 @@ def _coming(title: str, description: str, task: int) -> None:
                     unsafe_allow_html=True)
 
 
-def indicators() -> None:
-    _coming("Indicators", "IP addresses, domains, URLs and file hashes seen in events", 4)
-
-
-def correlation() -> None:
-    _coming("Correlation", "Events that share indicators", 4)
-
-
 def incidents() -> None:
     _coming("Incidents", "Group related events and track the investigation", 5)
 

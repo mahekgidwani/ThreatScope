@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 
 from tests.fake_backend import FakeBackend, HEALTH_DOWN, T0, event, incident, indicator
 
+REAL_CLIENT = httpx.Client
 APP = str(Path(__file__).resolve().parents[2] / "app.py")
 
 
@@ -22,8 +23,8 @@ def isolate(monkeypatch):
 
 
 def run(monkeypatch, backend: FakeBackend, page: str | None = None) -> AppTest:
-    real_client = httpx.Client
-    monkeypatch.setattr(httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(backend), **kw))
+    monkeypatch.setattr(httpx, "Client", lambda **kw: REAL_CLIENT(transport=httpx.MockTransport(backend), **kw))
+    st.cache_resource.clear()      # the page's cached client must be rebuilt for THIS backend
     at = AppTest.from_file(APP, default_timeout=30)
     if page:
         at.query_params["page"] = page

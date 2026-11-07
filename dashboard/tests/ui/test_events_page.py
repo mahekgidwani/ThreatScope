@@ -8,21 +8,23 @@ from streamlit.testing.v1 import AppTest
 
 from tests.fake_backend import FakeBackend, T0, event, indicator
 
-HARNESS = str(Path(__file__).with_name("harness_events.py"))
+REAL_CLIENT = httpx.Client      # captured once: patching twice in one test must not stack the fakes
+HARNESS = str(Path(__file__).with_name("harness.py"))
 ID_1 = "00000000-0000-4000-8000-000000000001"
 
 
 @pytest.fixture(autouse=True)
 def isolate(monkeypatch):
     monkeypatch.setenv("THREATSCOPE_API_URL", "http://127.0.0.1:8000")
+    monkeypatch.setenv("TS_PAGE", "events")
     st.cache_resource.clear()
     yield
     st.cache_resource.clear()
 
 
 def run(monkeypatch, backend: FakeBackend) -> AppTest:
-    real_client = httpx.Client
-    monkeypatch.setattr(httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(backend), **kw))
+    monkeypatch.setattr(httpx, "Client", lambda **kw: REAL_CLIENT(transport=httpx.MockTransport(backend), **kw))
+    st.cache_resource.clear()      # the page's cached client must be rebuilt for THIS backend
     return AppTest.from_file(HARNESS, default_timeout=30).run()
 
 
