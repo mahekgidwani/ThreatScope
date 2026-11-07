@@ -30,6 +30,34 @@ Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL majo
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
 
+### Task 10 - Documentation and full verification (done)
+Files: `README.md` (setup, usage, tests, security notes, troubleshooting), `docs/RISK_SCORING.md` (the scoring rule with worked
+examples), this log. Nothing in the application code changed in this task.
+Evidence (all from real runs, 2026-11-07):
+- `docker compose run --rm backend pytest -q` -> **575 passed** (SQLite + PostgreSQL), 0 skipped.
+- `... pytest -q -m "not postgres"` -> 416 passed. `... pytest -q -m postgres` -> 159 passed.
+- Fail-not-skip: with `docker compose stop db`, the 159 PostgreSQL tests all **errored** ("PostgreSQL is mandatory for these tests
+  but is not reachable"), exit code 1; none were skipped. `docker compose start db` restored it.
+- Localhost-only: `docker compose port backend 8000` = `127.0.0.1:8000`; `docker compose port db 5432` = `127.0.0.1:5432`;
+  `Get-NetTCPConnection` shows both listeners on `127.0.0.1` only.
+- Start-up log shows the database URL with the password hidden: `postgresql+psycopg://threatscope:***@db:5432/threatscope`.
+- Live round trip against the real stack: `/health` 200 ready; POST without key 401; POST with key 201 (`occurred_at`
+  converted to `04:30:00Z`, `risk_score` 55 = 40 + 15 + 0, three indicators); GET by id returned exactly the POST body; list with
+  `source=honeypot` total 1; the same POST again 409 with `existing_id` equal to the stored id; a second event from the same IP
+  got `risk_score` 60 (+5, second sighting) and every indicator's `sighting_count` became 2; a bad IP with secret-looking text
+  gave 422 and the response did not echo it; `limit=101` 422; unknown id 404; `domain=%25` 422 `invalid_filter`; `/docs` 200.
+- Database (dev, `threatscope`): `\dt` lists exactly `event_indicators, events, incident_events, incidents, indicators`; 2 events,
+  3 indicators, 6 links, 0 incidents; `events` carries the named constraints `pk_events`, `uq_events_source_external_event_id`,
+  `ck_events_source_valid`, `ck_events_severity_valid`, `ck_events_risk_score_range`. The test database `threatscope_test` is separate.
+- Outage test: after `docker compose stop db`, `/health` answered 503 `{"status":"not_ready","api":{"status":"up"},"database":
+  {"status":"down","latency_ms":null}}`, `/docs` still 200, and `GET /api/v1/events` gave a clean 503 `database_error` with no internals.
+  After `docker compose start db`, `/health` was 200 ready again and both events were still there (data volume kept). The log
+  recorded `database check failed (OperationalError)` - the error type only.
+- Observation: the 503 `/health` answer took about 4.1 s with the container stopped (Docker's name lookup for the stopped `db`
+  plus the 2-second connect timeout). Correct, but not instant.
+- Two demo events (`demo-001`, `demo-002`) now exist in the development database from the manual round trip.
+Deviations from the plan are listed in the ledger (`Ruling:` lines) and in each task's entry above.
+
 ### Task 9 - Health endpoint (done)
 Files: `backend/app/api/health.py` (registered in `main.py`), tests `tests/api/test_health.py`.
 `GET /health` returns `{"status": "ready" | "not_ready", "api": {"status": "up"}, "database": {"status": "up" | "down", "latency_ms": ...}}`.
