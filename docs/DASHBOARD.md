@@ -1,6 +1,6 @@
 # ThreatScope Phase 4: dashboard
 
-Streamlit dashboard that reads real data from the FastAPI backend. Done: Task 1 (foundation), Task 2 (shell, theme, Overview, System status), Task 3 (Events Explorer), Task 4 (Indicators and Correlation), Task 5 (Incident Management).
+Streamlit dashboard that reads real data from the FastAPI backend. Done: Task 1 (foundation), Task 2 (shell, theme, Overview, System status), Task 3 (Events Explorer), Task 4 (Indicators and Correlation), Task 5 (Incident Management), Task 6 (Reports and exports).
 
 ```
 Dashboard (Streamlit, Windows host) -> ts_dashboard.api_client -> FastAPI (:8000) -> services -> PostgreSQL
@@ -125,3 +125,15 @@ detail and write endpoints, and the database already had the tables (`incidents`
 **Dashboard.** Summary cards by status; a filterable, paged list; incident detail (fields, events with copyable IDs, the experimental-score label); a form to change
 status, title and notes; add events by pasted ID or remove them; and "Create an incident" from a shared indicator (the correlation view's grouping) or from event IDs.
 Without `INGEST_API_KEY` every control that writes is replaced by a "Read-only" explanation and nothing is sent. An incident is a work item, not a confirmed attack.
+
+## Task 6: Reports and exports (no backend change)
+
+- **Scope**: time range (UTC), source, severity. Every number below it follows the scope.
+- **Exact**: events in scope, the split by severity and by source (each is the `total` of a filtered `limit=1` query), incident counts by status (not scoped).
+- **From a sample** (the newest 1,000 events in scope; the page and the report say "the newest N of M" when it is fewer): most frequent event types and recurring
+  indicators (in 2+ events of the scope, next to their all-time sighting count). **High-risk events** are the highest-risk of the newest 200 critical and 200 high events.
+- **Downloads**: a Markdown summary report; an events CSV (up to 5,000 newest in scope, prepared on demand and invalidated when the scope changes); and a Markdown
+  investigation summary for any incident (notes, events with IDs, indicators its events share).
+- **CSV safety**: UTF-8 with BOM (Excel reads accents), UTC ISO times, one row per event with indicators and metadata JSON. Any cell that starts with `= + - @`, tab or
+  CR gets a leading apostrophe so a spreadsheet cannot run it as a formula; secrets in description, URL, indicators and metadata are hidden (`redact.py`).
+- Risk scores always appear with "Experimental prioritisation score — not a probability of compromise"; reports never call anything confirmed or malicious.

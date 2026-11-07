@@ -5,7 +5,7 @@ Streamlit runs this file first on every page view; it sets up the theme and the 
 import streamlit as st
 
 from ts_dashboard.theme import css
-from views import correlation, events, incidents, indicators, overview, placeholders, status
+from views import correlation, events, incidents, indicators, overview, reports, status
 
 st.set_page_config(page_title="ThreatScope", page_icon=":material/shield:", layout="wide", initial_sidebar_state="auto")
 st.markdown(f"<style>{css()}</style>", unsafe_allow_html=True)
@@ -17,7 +17,7 @@ navigation = st.navigation([
     st.Page(indicators.render, title="Indicators", icon=":material/fingerprint:", url_path="indicators"),
     st.Page(correlation.render, title="Correlation", icon=":material/hub:", url_path="correlation"),
     st.Page(incidents.render, title="Incidents", icon=":material/crisis_alert:", url_path="incidents"),
-    st.Page(placeholders.reports, title="Reports", icon=":material/summarize:", url_path="reports"),
+    st.Page(reports.render, title="Reports", icon=":material/summarize:", url_path="reports"),
     st.Page(status.render, title="System status", icon=":material/monitor_heart:", url_path="status"),
 ])
 navigation.run()
