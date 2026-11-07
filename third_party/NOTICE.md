@@ -1,16 +1,31 @@
 # Third-party notices and attribution
 
 ThreatScope is licensed under the **GNU General Public License v3.0** (see `LICENSE`).
-This is an academic project. Reference projects were studied; no code has been copied
-into this repository as of Phase 2.
+This is an academic project. Reference projects were studied. As of Phase 3 Task 3, code adapted from
+openSquat is included in `backend/integrations/opensquat_detector.py` (see the table and modifications log).
 
 | Project | Licence | How ThreatScope uses it | Status |
 |---|---|---|---|
-| openSquat (Andre Tenreiro) https://github.com/atenreiro/opensquat | GPL-3.0 | Domain-squatting detection logic will be adapted in Phase 3 (Levenshtein / homograph checks). | Not yet used. When adapted, copyright headers are kept and every modification is listed here. **No API keys or credentials are copied** (the reference folder contains `api_key.txt` and `vt_key.txt`; they are never read or copied). |
+| openSquat (Andre Tenreiro) https://github.com/atenreiro/opensquat | GPL-3.0 | Adapted (v2.3.0): `levenshtein` (unchanged), `check_homograph`, `homograph_to_latin` and the decision order of `SquattingDetector._process_levenshtein`, in `backend/integrations/opensquat_detector.py`, which keeps openSquat's copyright notice and a list of changes in its header. **No API keys or credentials are copied** (the reference folder contains `api_key.txt` and `vt_key.txt`; they were never read or copied). The openSquat domain feed is **not** bundled: its header says it is free for personal and research use only. | Used in Phase 3 Task 3. |
 | OWASP Honeypot-Project https://github.com/owasp/honeypot-project | Not verified locally (no LICENSE file found in the downloaded copy) | ModSecurity web-honeypot container and its v1.1 JSON event schema are the planned honeypot source in Phase 3. ELK and MISP are not used. | Licence must be confirmed upstream before any reuse. OWASP will be credited. |
 | FAME (CERT Societe Generale) https://github.com/certsocietegenerale/fame | GPL-3.0 | Design reference only (file analysis workflow). | No code copied. ThreatScope builds its own lightweight static analyser. |
 | OWASP Python Honeypot | Unknown | Not available locally; not used. | Architecture keeps honeypot adapters modular so it can be added later. |
 
+## Runtime dependencies added for the openSquat adapter
+
+| Package | Licence | Why |
+|---|---|---|
+| confusable_homoglyphs 3.3.x | MIT | Unicode "confusables" data; openSquat's own homograph check (`is_dangerous`). Pure Python, no further dependencies. |
+| homoglyphs 2.0.x | MIT | Converts look-alike characters to Latin; openSquat's own `homograph_to_latin`. Pure Python, no further dependencies. |
+
+Both are the same libraries openSquat itself requires. MIT is compatible with GPL-3.0.
+
 ## Modifications log
 
-None yet.
+openSquat 2.3.0 -> `backend/integrations/opensquat_detector.py` (Phase 3, Task 3):
+1. Detection returns structured `Finding` objects instead of printing coloured text; outcomes are unchanged (similarity, homograph, keyword contained).
+2. Punycode (`xn--`) names are decoded to Unicode before the homograph check. The original checks the label as written, so it reports "not a homograph" for every IDN stored as punycode (the openSquat feed stores them that way).
+3. `homograph_to_latin` is lower-cased and deterministic (candidates sorted). The original joins a set, whose order changes between runs, and keeps upper case.
+4. Homoglyph tables are loaded once instead of per call.
+5. Input is validated and normalised with ThreatScope's own domain rules; keywords shorter than 3 characters are refused; an optional trusted-domain list skips a brand's own domains.
+6. Not used: feed download, DNS/port checks, certificate transparency, VirusTotal, paid API, doppelganger mode.

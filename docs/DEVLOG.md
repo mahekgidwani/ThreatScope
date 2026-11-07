@@ -296,3 +296,35 @@ always count), so rare TLDs and names like `self.info` can be wrong; UTF-16 text
 Tests: 110 new (full suite 853: 650 without PostgreSQL, 203 PostgreSQL-only). Mutation checks: removing the URL
 sanitising, size limit, zip read cap and PNG trailing-data check each made tests fail (the zip-cap one only after adding a
 peak-memory assertion). Dev database untouched (only `--dry-run` was used against it).
+
+### Task 3 - openSquat domain adapter (done)
+Files: `backend/integrations/opensquat_detector.py` (adapted detection + event builder), `opensquat_adapter.py`
+(command line), `cli_common.py` (shared "build a client from the environment" helper; `analyse_file.py` now uses it too),
+tests `test_opensquat_{detector,event,cli}.py` + `fakes.py`, `requirements.txt` (+ confusable_homoglyphs, homoglyphs),
+`third_party/NOTICE.md` (openSquat attribution, modification list, dependency licences).
+What openSquat gave us: the Levenshtein distance, the homograph check/conversion and the decision order (similarity ->
+homograph -> "keyword inside the domain"). Its `SquattingDetector.check()` cannot be called as-is for structured results: it
+only prints coloured text and returns domain names, so the kind and distance exist only inside the printed line. The adapter
+therefore re-uses the functions and decision logic (GPL-3.0, header kept, changes listed) and returns `Finding` objects.
+Biggest finding: openSquat's feed stores internationalised names as punycode (391 `xn--` lines in the 100k-line sample), and
+its homograph check returns False for punycode, so the original would miss every IDN homograph in its own feed. We decode
+first (tested: `xn--pypal-4ve.com` -> `domain_homograph`, distance 0 to "paypal").
+Use: `docker compose exec backend python -m integrations.opensquat_adapter --keywords brands.txt --domains feed.txt
+[--trusted own-domains.txt] [--confidence 0-4] [--max-events N] [--dry-run]` (files must be readable inside the container;
+see Task 2 for `docker compose run -v` or `docker compose cp`). `--confidence` is openSquat's scale (default 1 = distance <= 1).
+Event: `source=domain`, `domain` = punycode form, `event_type` = `domain_similarity` | `domain_homograph` |
+`domain_keyword_match`; severity by distance (0-1 medium, 2 low, 3-4 info, keyword-contained low) and NEVER above medium;
+description and metadata say "detection finding only, not a confirmed threat", `metadata.verified=false`; metadata also holds
+keyword, detection kind, distance, confidence label, compared label and the Unicode form of the domain.
+`external_event_id = domain:<hash(keyword, domain)>`: re-running over the same feed gives duplicates (counted, not errors);
+one domain matching two keywords is two events, which raises that domain's sighting count (and the repeat-risk bonus).
+Safety: feed read line by line (a 5 MB line is skipped unread); invalid lines are counted, not fatal; at most 500 findings per
+run by default (`--max-events`); the run stops at once on a rejected key or an unreachable API; nothing touches the network
+except the ThreatScope API.
+Real-feed check (dry run, dev database untouched): 100,000 domains x 5 keywords in 11 s -> 21 findings (16 keyword-contained,
+5 one-edit typos). It also shows why a finding is not a verdict: `amazoniagroup.com.br` contains "amazon".
+Limits: only the first label is compared for similarity (like openSquat); the keyword fallback uses the whole name; no
+legitimate-domain list except the optional `--trusted`; short or generic keywords are noisy; no DNS/web/certificate checks, so
+nothing can say a domain is actually used for abuse.
+Tests: 101 new (full suite 954: 747 without PostgreSQL, 207 PostgreSQL-only). Mutation checks: skipping the punycode decode,
+ignoring the trusted list, dropping the keyword from the event id and removing the lower-casing each made tests fail.
