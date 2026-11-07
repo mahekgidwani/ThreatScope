@@ -46,4 +46,5 @@ class Event(Base):
     event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JsonType, default=dict)
 
     indicators: Mapped[list["Indicator"]] = relationship(  # noqa: F821
-        secondary="event_indicators", back_populates="events", passive_deletes=True)
+        secondary="event_indicators", back_populates="events", passive_deletes=True,
+        order_by="Indicator.id")  # stable order in API responses

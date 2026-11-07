@@ -30,6 +30,30 @@ Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL majo
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
 
+### Task 7 - Services: create, get and list events (done)
+Files: `backend/app/errors.py`, `app/services/{event_service,indicator_service,incident_service,paging}.py`; tests
+`tests/unit/test_errors.py`, `tests/db/test_event_service.py`, `tests/db/test_concurrency_pg.py`; one line added to
+`app/models/event.py` (indicators come back in a stable order).
+`errors.py`: our own exceptions (duplicate 409, not found 404, bad API key 401, invalid filter 422). Task 8 turns them into
+JSON error responses.
+`create_event` (one database transaction): (1) insert the event; a duplicate (same source + external_event_id) is rejected
+here by the UNIQUE constraint and reported as `DuplicateEventError` carrying the existing event's id; any other integrity
+error is NOT disguised as a duplicate. (2) For each indicator run `UPDATE ... SET sighting_count = sighting_count + 1
+RETURNING ...` - a single atomic statement, so concurrent requests never lose a count; new indicators are inserted inside a
+SAVEPOINT so losing a creation race only undoes the savepoint. Indicators are always processed in sorted (type, value)
+order so two requests can never lock each other in a circle (deadlock). (3) Score the event (`prior_sightings` = highest
+returned count - 1, so the event itself is never counted), link the indicators, commit. Any failure rolls everything back.
+`get_event` / `list_events`: exact-match filters (source, event_type, severity, source_ip, domain, start_time, end_time),
+newest first with id as tie-break so paging is stable, limit 1-100, offset >= 0, `start_time` inclusive / `end_time`
+exclusive, naive times and start > end rejected. IP and domain filters are normalised exactly like ingestion
+(`BÜCHER.example` finds `xn--bcher-kva.example`). No SQL LIKE anywhere, so `%` and `_` are ordinary characters.
+Tests: 78 (service behaviour on SQLite and PostgreSQL, plus 3 PostgreSQL-only races: 8 simultaneous identical
+external ids -> exactly 1 success and 7 clean conflicts; 8 simultaneous events sharing a domain -> sighting_count 8 and
+exact bonus sequence; opposite-order indicators -> no deadlock). Mutation checks: a read-then-write counter made 2
+concurrency tests fail; removing the sorted order made the deadlock test fail 3 times out of 3. Concurrency tests passed
+5 runs in a row after restoring.
+Command: `docker compose run --rm backend pytest -q`.
+
 ### Task 6 - Indicator extraction and experimental risk score (done)
 Files: `backend/app/services/{indicator_extractor,risk_scoring}.py`, tests `tests/unit/test_indicator_extractor.py`
 and `tests/unit/test_risk_scoring.py`. Both modules are pure functions: no database, no web framework.
