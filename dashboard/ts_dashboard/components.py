@@ -126,7 +126,7 @@ def primary_indicator(event: Event) -> tuple[str, str]:
     return "", ""
 
 
-def events_table(events: Sequence[Event]) -> str:
+def events_table(events: Sequence[Event], with_id: bool = False) -> str:
     rows = []
     for e in events:
         kind, value = primary_indicator(e)
@@ -138,9 +138,9 @@ def events_table(events: Sequence[Event]) -> str:
             cell_mono(e.event_type),
             cell_mono(value, 34) if value else cell_muted("none"),
             cell_text(e.description, 90),
-        ])
+        ] + ([cell_mono(str(e.id)[:8])] if with_id else []))
     return table([("Occurred", False), ("Severity", False), ("Risk", True), ("Source", False), ("Type", False),
-                  ("Indicator", False), ("Description", False)], rows)
+                  ("Indicator", False), ("Description", False)] + ([("ID", False)] if with_id else []), rows)
 
 
 def indicators_table(indicators: Sequence[Indicator]) -> str:
@@ -157,3 +157,41 @@ def high_risk_table(events: Sequence[Event]) -> str:
                      f"<strong>{e.risk_score}</strong>", cell_mono(e.event_type), cell_mono(value, 28) if value else cell_muted("none")])
     return table([("Occurred (UTC)", False), ("Severity", False), ("Risk", True), ("Type", False), ("Indicator", False)], rows)
 
+
+# ---- event detail ---------------------------------------------------------------------------
+
+def definition_list(pairs: Sequence[tuple[str, str]]) -> str:
+    """Label / value pairs. Values are cell HTML built by the helpers above (already escaped)."""
+    items = "".join(f'<div class="ts-dl-row"><dt>{escape(label)}</dt><dd>{value}</dd></div>' for label, value in pairs)
+    return f'<dl class="ts-dl">{items}</dl>'
+
+
+def event_detail(event: Event) -> str:
+    optional = [("Source IP", event.source_ip), ("Destination IP", event.destination_ip), ("Domain", event.domain),
+                ("URL", event.url), ("File hash (SHA-256)", event.file_hash)]
+    pairs = [
+        ("Event ID", cell_mono(str(event.id))),
+        ("External ID", cell_mono(event.external_event_id) if event.external_event_id else cell_muted("none")),
+        ("Source", cell_text(SOURCE_LABELS.get(event.source, event.source))),
+        ("Event type", cell_mono(event.event_type)),
+        ("Severity", severity_badge(event.severity)),
+        ("Risk score", f"<strong>{event.risk_score}</strong> <span class=\"ts-muted\">/ 100</span>"),
+        ("Occurred", cell_text(fmt_time(event.occurred_at))),
+        ("Received", cell_text(fmt_time(event.received_at))),
+        ("Description", cell_text(event.description)),
+    ] + [(label, cell_mono(value)) for label, value in optional if value]
+    return definition_list(pairs)
+
+
+def risk_factors_table(event: Event) -> str:
+    if not event.risk_factors:
+        return empty_state("No risk factors recorded", "The API returned no explanation for this score.")
+    rows = [[cell_mono(f.rule), f"<strong>{f.points:+d}</strong>"] for f in event.risk_factors]
+    rows.append([cell_muted("total (capped at 100)"), f"<strong>{event.risk_score}</strong>"])
+    return table([("Rule", False), ("Points", True)], rows)
+
+
+def event_indicators_table(event: Event) -> str:
+    if not event.indicators:
+        return empty_state("No indicators", "No IP, domain, URL or hash was extracted from this event.")
+    return indicators_table(event.indicators)

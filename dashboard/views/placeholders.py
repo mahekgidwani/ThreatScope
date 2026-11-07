@@ -13,10 +13,6 @@ def _coming(title: str, description: str, task: int) -> None:
                     unsafe_allow_html=True)
 
 
-def events() -> None:
-    _coming("Events", "Search, filter and inspect every collected event", 3)
-
-
 def indicators() -> None:
     _coming("Indicators", "IP addresses, domains, URLs and file hashes seen in events", 4)
 

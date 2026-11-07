@@ -23,8 +23,9 @@ SEVERITY_LABELS = {"critical": "Critical", "high": "High", "medium": "Medium", "
 SOURCE_LABELS = {"domain": "Domain", "honeypot": "Honeypot", "file": "File", "network": "Network"}
 INDICATOR_LABELS = {"ip": "IP address", "domain": "Domain", "url": "URL", "sha256": "SHA-256"}
 SCORE_NOTE = "Experimental prioritisation score — not a probability of compromise."
-FONT_SANS = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif'
-FONT_MONO = '"Cascadia Mono", Consolas, "SF Mono", Menlo, monospace'
+# Source Sans Pro / Source Code Pro ship inside Streamlit, so every machine (and the data grid's canvas) draws the same faces.
+FONT_SANS = '"Source Sans Pro", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif'
+FONT_MONO = '"Source Code Pro", "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace'
 
 
 def css() -> str:
@@ -56,7 +57,7 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible, [tabindex]
 [data-testid="stSidebarNavLink"][aria-current="page"] { background: rgba(34,211,238,.14); color: var(--ts-text); font-weight: 600; }
 
 /* header */
-.ts-title { font-size: 1.5rem; font-weight: 650; letter-spacing: -.01em; margin: 0; line-height: 1.25; }
+.ts-title { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em; margin: 0; line-height: 1.25; }
 .ts-desc { color: var(--ts-muted); font-size: .92rem; margin: .2rem 0 1.1rem; }
 .ts-status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 .ts-pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px;
@@ -74,15 +75,17 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible, [tabindex]
 /* panels and KPI cards */
 [class*="st-key-panel-"] { background: var(--ts-panel); border: 1px solid var(--ts-border); border-radius: 10px;
   padding: 16px 18px 22px; }
+[class*="st-key-panel-"] [data-testid="stElementContainer"] { max-width: 100%; }   /* Streamlit sizes elements from the padded width */
 [class*="st-key-panel-"] [data-testid="stPlotlyChart"] { max-width: 100%; overflow: hidden; }
 .ts-kpi { background: var(--ts-panel); border: 1px solid var(--ts-border); border-radius: 10px; padding: 15px 18px 14px; height: 100%; }
 .ts-kpi-label { display: flex; align-items: center; gap: 8px; color: var(--ts-muted); font-size: 13px; }
 .ts-kpi-label i { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--ts-accent)); }
-.ts-kpi-value { font-size: 1.9rem; font-weight: 650; line-height: 1.15; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+.ts-kpi-value { font-size: 1.9rem; font-weight: 700; line-height: 1.15; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
 .ts-kpi-value.lit { color: var(--c); }   /* only when a severity count is above zero */
 .ts-kpi-context { color: var(--ts-muted); font-size: 12.5px; }
 .ts-panel-title { font-size: 15px; font-weight: 600; margin: 0; }
 .ts-panel-sub { color: var(--ts-muted); font-size: 12.5px; margin: 2px 0 8px; }
+.ts-center { text-align: center; }
 .ts-note { color: var(--ts-muted); font-size: 12px; margin: 10px 0 2px; line-height: 1.4; }
 
 /* tables */
@@ -102,6 +105,13 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible, [tabindex]
 .ts-badge { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
   color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent);
   border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); white-space: nowrap; }
+
+.ts-dl { margin: 0; display: grid; gap: 0; }
+.ts-dl-row { display: grid; grid-template-columns: 11rem 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--ts-border); }
+.ts-dl-row:last-child { border-bottom: 0; }
+.ts-dl dt { color: var(--ts-muted); font-size: 13px; margin: 0; }
+.ts-dl dd { margin: 0; font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .ts-dl-row { grid-template-columns: 1fr; gap: 2px; } }
 
 /* states */
 .ts-state { display: flex; gap: 14px; align-items: flex-start; padding: 18px 4px; }
