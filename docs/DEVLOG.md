@@ -30,6 +30,32 @@ Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL majo
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
 
+### Task 4 - Database layer and the five tables (done)
+Files: `backend/app/enums.py`, `app/db.py`, `app/models/{types,event,indicator,incident,__init__}.py`;
+tests: `tests/db/test_constraints.py`, `tests/db/test_db_layer.py`, `tests/unit/test_db_guard.py`;
+test helpers: `tests/db_guard.py`, `tests/db_support.py`, fixtures in `tests/conftest.py`, `tests/**/__init__.py`.
+`enums.py`: the allowed words (source, severity, indicator type, incident status). The database stores them as text and
+CHECK constraints reject anything else.
+`db.py`: `Base` (parent of all tables) with a naming convention so every constraint and index gets a predictable name
+(this is what makes a later move to Alembic easy); `make_engine` (PostgreSQL gets a 2-second connect timeout);
+`get_engine` (built once from settings); `get_db` (one session per request, rollback on error, always closed);
+`init_db` (the only place that creates tables, using `create_all`); `check_db` (runs `SELECT 1`, never raises,
+logs only the error type).
+Tables (`models/`): `events` (UNIQUE source + external_event_id; CHECKs on source, severity, risk 0-100; 5 indexes),
+`indicators` (UNIQUE type + value; sighting_count >= 1), `event_indicators` and `incident_events` (composite primary keys
+so a link can exist only once; ON DELETE CASCADE), `incidents` (status/severity/risk CHECKs). Times use `UtcDateTime`:
+always timezone-aware UTC, naive datetimes are refused. Metadata is JSONB on PostgreSQL. The Python attribute
+`Event.event_metadata` maps to the column `metadata` because `metadata` is reserved by SQLAlchemy.
+Tests: every database test runs twice, on in-memory SQLite (fast) and on real PostgreSQL 16. PostgreSQL tests use the
+separate database `threatscope_test`, never the development database `threatscope`. `db_guard.py` refuses to drop
+tables or create databases unless the name matches `[A-Za-z0-9_]+_test` and differs from the dev database; it runs
+before any connection is made. If PostgreSQL is down the PostgreSQL tests show as ERROR (never skipped).
+Commands: `docker compose run --rm backend pytest -q` (everything) or `... pytest -q -m "not postgres"` (quick loop).
+Result: 128 passed (98 without PostgreSQL, 30 PostgreSQL-only). Dev database `threatscope` still has 0 tables; the test
+database has exactly the five. Mutation check: with the guard disabled, 12 guard tests failed; guard restored, 13 pass.
+Common errors: `PostgreSQL is mandatory ...` = start the database (`docker compose up -d db`); `IntegrityError` in tests is
+usually the point of the test (a constraint doing its job).
+
 ### Task 3 - Configuration and logging (done)
 Files: `backend/app/config.py`, `backend/app/logging_config.py`, `backend/app/__init__.py`,
 `backend/tests/conftest.py`, `backend/tests/unit/test_config.py`, `backend/tests/unit/test_logging_config.py`,

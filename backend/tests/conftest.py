@@ -17,3 +17,42 @@ os.environ["INGEST_API_KEY"] = TEST_API_KEY
 os.environ.setdefault("POSTGRES_USER", "test_user")
 os.environ.setdefault("POSTGRES_PASSWORD", "test-password-fake")
 os.environ.setdefault("POSTGRES_DB", "test_db")
+
+import pytest  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
+from app.config import get_settings  # noqa: E402
+from tests.db_support import build_postgres_engine, build_sqlite_engine, reset_schema  # noqa: E402
+
+
+@pytest.fixture(scope="session")
+def _postgres_base_engine():
+    """One engine for the whole run, pointing at the dedicated <POSTGRES_DB>_test database."""
+    engine = build_postgres_engine(get_settings())
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def pg_engine(_postgres_base_engine):
+    """PostgreSQL test engine with a fresh, empty schema (test database only)."""
+    reset_schema(_postgres_base_engine, get_settings().postgres_db)
+    return _postgres_base_engine
+
+
+@pytest.fixture(params=["sqlite", pytest.param("postgres", marks=pytest.mark.postgres)])
+def engine(request):
+    """Every test using this fixture runs on in-memory SQLite AND on real PostgreSQL."""
+    if request.param == "sqlite":
+        sqlite_engine = build_sqlite_engine()
+        reset_schema(sqlite_engine)
+        yield sqlite_engine
+        sqlite_engine.dispose()
+    else:
+        yield request.getfixturevalue("pg_engine")
+
+
+@pytest.fixture
+def session(engine):
+    with Session(engine) as db_session:
+        yield db_session
