@@ -261,3 +261,38 @@ Tests: 58 new. Fake-server tests (MockTransport and real sockets for refused con
 and contract tests against the REAL app on SQLite and PostgreSQL. Mutation check: removing the key scrub, enabling
 redirects and breaking the duplicate branch made 6 tests fail; restored.
 Common errors: `ApiAuthError` = wrong `INGEST_API_KEY`; `ApiConnectionError` = API not running or wrong URL.
+
+### Task 2 - In-house static file analyser (done)
+Files: `backend/integrations/file_formats.py` (PDF, DOCX/zip, PNG, JPEG parsers), `file_analyser.py` (limits, streamed
+SHA-256, type detection, text/JSON/CSV, indicators, event builder), `analyse_file.py` (command line), and tests
+`backend/tests/integrations/test_file_*.py` + `samples.py` (harmless sample builders). No new dependency: only the Python
+standard library (`hashlib`, `zipfile`, `struct`, `re`, `json`, `csv`) plus the API's own `normalise_domain`. A PDF/Office
+library (pypdf, python-docx, Pillow, python-magic) was judged not worth the install weight and attack surface for an MVP.
+Use (no public upload endpoint; this is a local command):
+`docker compose exec backend python -m integrations.analyse_file /path/in/container [--dry-run] [--max-bytes N]`.
+To analyse a host file: `docker compose run --rm -v "F:\folder:/samples:ro" -e THREATSCOPE_API_URL=http://backend:8000 backend
+python -m integrations.analyse_file /samples/file.pdf`. `--dry-run` prints the event and needs no API key.
+What it records (event `source=file`, `event_type=file_analysis`): SHA-256 as `file_hash`, size, detected type (from
+CONTENT, not the extension; a mismatch is a finding), structure (PDF version/encrypted flag, DOCX macro/embedded/external
+parts, PNG/JPEG dimensions, JSON top-level kind, CSV rows/columns, line count), and IPv4s / domains / URLs found inside.
+Never recorded: file contents. URLs are stored without credentials, query string or fragment.
+Findings vs verdict: severity is `info`, or `low` when "review markers" exist (PDF JavaScript/OpenAction/Launch/embedded
+file, DOCX macro project/embedded objects/remote template, data after PNG end, executable header, extension mismatch).
+Other findings (unsupported format, malformed, truncated scan, invalid JSON/CSV) are notes only. Every event carries the
+note "static analysis only ... not a malware verdict". Nothing is ever executed, opened in an application, or rendered.
+Safety limits: files over 10 MB are refused; only the first 1 MB is parsed (the hash covers everything and `truncated` is
+set); zip parts are read up to 2 MB and at most 5000 entries (a 60 MB zip bomb is never expanded: tested by peak memory);
+PNG/JPEG are walked by seeking with bounded loops; indicator lists are capped (30 URLs, 50 IPs, 50 domains), so an event
+always fits the API's metadata limit. Empty/missing/non-regular/unreadable files raise a clear error, not a crash.
+Duplicates: `external_event_id = file:<first 32 hex of the SHA-256>`, so the same content is stored once whatever its name
+(the API answers 409, the tool says "already recorded").
+Why indicators sit in `metadata`: the API makes indicator rows only from top-level fields, so a file event has exactly one
+indicator (`sha256`). Extra events per URL would inflate the hash's sighting count and the repeat-risk bonus. Phase 4
+correlation can decide how to use the embedded values.
+Known limits: no IPv6, no OCR/image content, no decompression of PDF streams (markers hidden in compressed streams or
+obfuscated names are missed: "no markers" never means "safe"); bare domains only for a fixed list of common TLDs (URL hosts
+always count), so rare TLDs and names like `self.info` can be wrong; UTF-16 text is treated as unknown binary; old
+`.doc`/`.xls` and `.docm` are not parsed (a `.docm` shows as a plain zip/docx with a macro marker).
+Tests: 110 new (full suite 853: 650 without PostgreSQL, 203 PostgreSQL-only). Mutation checks: removing the URL
+sanitising, size limit, zip read cap and PNG trailing-data check each made tests fail (the zip-cap one only after adding a
+peak-memory assertion). Dev database untouched (only `--dry-run` was used against it).
