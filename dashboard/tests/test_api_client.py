@@ -109,13 +109,17 @@ def test_error_text_is_one_short_clean_line():
 
 # ---- authentication ---------------------------------------------------------------------
 
-def test_reads_never_send_an_api_key_and_there_are_no_write_methods():
+def test_reads_never_send_an_api_key():
     api, seen = make_api(lambda request: httpx.Response(
         200, json=HEALTH_READY if request.url.path == "/health" else page_json([])))
     api.health(); api.list_events(); api.list_indicators(); api.list_incidents()
     assert all("x-api-key" not in request.headers for request in seen)
     assert {request.method for request in seen} == {"GET"}
-    assert not [name for name in dir(ThreatScopeApi) if name.startswith(("post", "put", "patch", "delete", "create", "submit"))]
+
+
+def test_the_only_write_methods_are_the_two_incident_ones():
+    writers = {n for n in dir(ThreatScopeApi) if not n.startswith("_") and n.startswith(("post", "put", "patch", "delete", "create", "update", "submit"))}
+    assert writers == {"create_incident", "update_incident"}
 
 
 def test_a_401_from_the_api_is_reported_as_an_auth_error_with_a_message():
@@ -229,3 +233,145 @@ def test_list_incidents_empty_and_with_data():
                 "summary": None}
     api, _ = make_api(json_handler(page_json([incident])))
     assert api.list_incidents().items[0].status == "investigating"
+
+
+# ---- incident reads and writes -------------------------------------------------------------------------
+
+WRITE_KEY = "0123456789abcdefSECRETKEY"
+INCIDENT = {"id": 7, "title": "Probes", "status": "open", "severity": "high", "risk_score": 60, "created_at": "2026-11-07T10:00:00Z",
+            "updated_at": "2026-11-07T10:00:00Z", "summary": None, "event_count": 1, "events": [event_json()]}
+EVENT_ID = "7c27133f-9c0d-4878-a800-5b2278eca1f5"
+
+
+def keyed_api(handler):
+    from ts_dashboard.config import DashboardSettings
+    seen: list[httpx.Request] = []
+
+    def recording(request):
+        seen.append(request)
+        return handler(request)
+
+    http = httpx.Client(base_url="http://api.test", transport=httpx.MockTransport(recording))
+    return ThreatScopeApi(DashboardSettings(_env_file=None, ingest_api_key=WRITE_KEY), http_client=http), seen
+
+
+def test_get_incident_parses_detail_with_events_and_needs_no_key():
+    api, seen = make_api(json_handler(INCIDENT))
+    detail = api.get_incident(7)
+    assert (detail.id, detail.event_count, detail.events[0].risk_score) == (7, 1, 60) and seen[0].url.path == "/api/v1/incidents/7"
+    assert "x-api-key" not in seen[0].headers
+
+
+def test_get_incident_not_found_and_non_numeric_id():
+    api, _ = make_api(json_handler({"error": {"code": "not_found", "message": "Incident not found", "details": {}}}, 404))
+    with pytest.raises(ApiNotFoundError):
+        api.get_incident(99)
+    with pytest.raises(ValueError):
+        api.get_incident("../x")
+
+
+def test_writes_without_a_key_are_refused_locally_and_nothing_is_sent():
+    from ts_dashboard.api_client import ApiAuthError, ApiWriteDisabledError
+    api, seen = make_api(json_handler(INCIDENT, 201))
+    assert api.can_write is False
+    with pytest.raises(ApiWriteDisabledError) as caught:
+        api.create_incident("t", [EVENT_ID])
+    assert isinstance(caught.value, ApiAuthError) and "INGEST_API_KEY" in caught.value.user_message
+    with pytest.raises(ApiWriteDisabledError):
+        api.update_incident(7, status="closed")
+    assert seen == []
+
+
+def test_create_sends_the_key_only_as_a_header_and_the_expected_body():
+    api, seen = keyed_api(json_handler(INCIDENT, 201))
+    assert api.can_write
+    detail = api.create_incident("Probes", [EVENT_ID, EVENT_ID.upper()], summary="notes")
+    request = seen[0]
+    assert (request.method, request.url.path) == ("POST", "/api/v1/incidents")
+    assert request.headers["x-api-key"] == WRITE_KEY
+    assert WRITE_KEY not in str(request.url) and WRITE_KEY.encode() not in request.content
+    import json
+    assert json.loads(request.content) == {"title": "Probes", "event_ids": [EVENT_ID, EVENT_ID], "summary": "notes"}
+    assert detail.id == 7
+
+
+def test_update_sends_only_what_was_given():
+    import json
+    api, seen = keyed_api(json_handler(INCIDENT))
+    api.update_incident(7, status="investigating")
+    api.update_incident(7, summary="new notes", title="T")
+    api.update_incident(7, clear_summary=True)
+    api.update_incident(7, add_event_ids=[EVENT_ID], remove_event_ids=[EVENT_ID.upper()])
+    bodies = [json.loads(r.content) for r in seen]
+    assert bodies == [{"status": "investigating"}, {"title": "T", "summary": "new notes"}, {"summary": None},
+                      {"add_event_ids": [EVENT_ID], "remove_event_ids": [EVENT_ID]}]
+    assert {r.method for r in seen} == {"PATCH"} and all(r.url.path == "/api/v1/incidents/7" for r in seen)
+    assert all(r.headers["x-api-key"] == WRITE_KEY for r in seen)
+
+
+def test_write_arguments_are_validated_before_sending():
+    api, seen = keyed_api(json_handler(INCIDENT))
+    with pytest.raises(ValueError):
+        api.create_incident("t", ["not-a-uuid"])
+    with pytest.raises(ValueError):
+        api.update_incident("7/../x", status="closed")
+    assert seen == []
+
+
+def test_a_rejected_key_is_an_auth_error_with_guidance():
+    api, _ = keyed_api(json_handler({"error": {"code": "unauthorized", "message": "Missing or invalid API key", "details": {}}}, 401))
+    with pytest.raises(ApiAuthError) as caught:
+        api.update_incident(7, status="closed")
+    assert "INGEST_API_KEY" in caught.value.user_message and not caught.value.retryable
+
+
+def test_validation_problems_are_explained_with_field_and_rule_but_never_values():
+    body = {"error": {"code": "validation_error", "message": "Request validation failed",
+                      "details": [{"loc": ["body", "title"], "type": "value_error", "msg": "title must not be blank"}]}}
+    api, _ = keyed_api(json_handler(body, 422))
+    with pytest.raises(ApiRejectedError) as caught:
+        api.create_incident("   ", [EVENT_ID])
+    assert caught.value.user_message == "The ThreatScope API did not accept that: title: title must not be blank."
+    other, _ = make_api(json_handler(ERROR_BODY, 422))
+    with pytest.raises(ApiRejectedError) as plain:
+        other.list_events()
+    assert plain.value.user_message == "The ThreatScope API did not accept those filters."
+
+
+def test_the_key_is_scrubbed_if_a_server_echoes_it():
+    body = {"error": {"code": "x", "message": f"bad key {WRITE_KEY}", "details": [{"loc": ["body", "t"], "msg": f"{WRITE_KEY}"}]}}
+    api, _ = keyed_api(json_handler(body, 422))
+    with pytest.raises(ApiRejectedError) as caught:
+        api.update_incident(7, status="closed")
+    assert WRITE_KEY not in str(caught.value) and WRITE_KEY not in caught.value.user_message
+
+
+def test_write_connection_failures_and_redirects_do_not_leak_or_follow():
+    def refuse(request):
+        raise httpx.ConnectError(f"refused {WRITE_KEY}")
+    api, _ = keyed_api(refuse)
+    with pytest.raises(ApiConnectionError) as caught:
+        api.create_incident("t", [EVENT_ID])
+    assert WRITE_KEY not in str(caught.value)
+
+    def redirect(request):
+        if request.url.path == "/elsewhere":
+            pytest.fail("the client followed a redirect with the key")
+        return httpx.Response(307, headers={"location": "/elsewhere"})
+    api, seen = keyed_api(redirect)
+    with pytest.raises(ApiResponseError):
+        api.update_incident(7, status="closed")
+    assert len(seen) == 1
+
+
+def test_the_key_never_appears_in_repr():
+    api, _ = keyed_api(json_handler(INCIDENT))
+    assert WRITE_KEY not in repr(api) and WRITE_KEY not in str(vars(api).get("_http", ""))
+
+
+def test_a_plain_rule_message_from_the_api_is_shown_when_there_is_no_field_list():
+    body = {"error": {"code": "invalid_filter", "message": "an incident must keep at least one event", "details": {}}}
+    api, _ = keyed_api(json_handler(body, 422))
+    with pytest.raises(ApiRejectedError) as caught:
+        api.update_incident(7, remove_event_ids=[EVENT_ID])
+    assert caught.value.user_message == "The ThreatScope API did not accept that: an incident must keep at least one event."

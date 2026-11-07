@@ -1,6 +1,6 @@
 # ThreatScope Phase 4: dashboard
 
-Streamlit dashboard that reads real data from the FastAPI backend. Done: Task 1 (foundation), Task 2 (shell, theme, Overview, System status), Task 3 (Events Explorer), Task 4 (Indicators and Correlation).
+Streamlit dashboard that reads real data from the FastAPI backend. Done: Task 1 (foundation), Task 2 (shell, theme, Overview, System status), Task 3 (Events Explorer), Task 4 (Indicators and Correlation), Task 5 (Incident Management).
 
 ```
 Dashboard (Streamlit, Windows host) -> ts_dashboard.api_client -> FastAPI (:8000) -> services -> PostgreSQL
@@ -38,8 +38,9 @@ docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend p
 ## Rules
 
 1. HTTP only. The dashboard imports no backend code, no SQLAlchemy, no database driver (`tests/test_architecture.py`).
-2. **No API key in the dashboard.** All endpoints it uses are `GET` and open; only `POST /api/v1/events` needs `X-API-Key`.
-   The dashboard never writes, so it is not given the key. If Task 5 needs writes (incident status), that decision is made then.
+2. **The API key is optional, and used only for incident writes.** Every read is an open `GET`. Creating and editing incidents needs `X-API-Key`,
+   so the dashboard reads `INGEST_API_KEY` (same `.env` as the API) if present; without it the dashboard is read-only and says so. The key is a
+   `SecretStr`, sent only as that header by two client methods, scrubbed from error text, and never rendered (tests enforce each point).
 3. No caching in the client: what a page shows was just read from the API. When the API fails the page shows the error, not old data.
 4. Risk scores are shown as the backend computed them, labelled "Experimental prioritisation score - not a probability of compromise."
 
@@ -57,7 +58,7 @@ docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend p
 
 | Gap | Affects | Workaround now | Smallest fix if needed |
 |---|---|---|---|
-| No incident detail, no incident-to-events link, no create / status change / notes (list only; the `incident_events` table exists) | Task 5 | list incidents only | `GET /incidents/{id}` returning event ids; `PATCH /incidents/{id}` for status (needs the key) |
+| ~~No incident detail, link to events, create, status change or notes~~ | Task 5 | **Closed in Task 5** (see below) | |
 | Events cannot be filtered by `url`, `file_hash` or indicator id (only `source_ip`, `domain`) | Tasks 4, 6 | each event embeds its indicators, so match client-side over fetched pages | an `indicator_id` filter on `GET /events` |
 | No totals endpoint | Tasks 2, 6 | `total` of a page with `limit=1` is an exact filtered count; trends use one count per time window | `GET /stats` |
 | Fixed order: events by `occurred_at` desc, indicators by `last_seen` desc | Tasks 3, 4 | sort the fetched page in the browser | `sort` parameter |
@@ -103,3 +104,24 @@ docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend p
   for the events it reads. The limit is the scan size: with more than 1,000 events, older ones are not searched, and every page says "searched the newest N of M".
   If the project outgrows that, the smallest fix is an `indicator_id` filter on `GET /api/v1/events` (one join on `event_indicators`, read-only).
 - Tests use the in-memory fake API; the graph edges are tested to equal the stored memberships exactly (nothing invented).
+
+## Task 5: Incident Management (small backend extension)
+
+**Why the backend changed.** The API could only list incidents. Viewing an incident's events, grouping events and tracking status are impossible without
+detail and write endpoints, and the database already had the tables (`incidents`, `incident_events`). The additions are small, additive and need no schema change:
+
+| Endpoint | Auth | Does |
+|---|---|---|
+| `GET /api/v1/incidents/{id}` | none | the incident plus its events (newest first, with indicators); 404 if unknown |
+| `POST /api/v1/incidents` | key | `{title, summary?, event_ids[1..100]}` creates an `open` incident; unknown event = 404, nothing created |
+| `PATCH /api/v1/incidents/{id}` | key | any of `status`, `title`, `summary` (empty clears), `add_event_ids`, `remove_event_ids`; an incident keeps at least one event |
+
+- Severity and risk score are **not** accepted from clients: they are the highest severity and the highest event risk score among the grouped events, recomputed when
+  membership changes. No second scoring formula exists. `IncidentOut` gained `event_count`, a query-time count (no new column).
+- Notes live in the existing `summary` column (the dashboard calls it "Investigation notes"); there is no separate notes table, so no notes history.
+- Backend code touched: `models/incident.py`, `schemas/incident.py`, `services/incident_service.py`, `api/incidents.py`. 78 new tests run on SQLite and PostgreSQL
+  (`backend/tests/api/test_incidents_api.py`); the earlier 1,147 still pass unchanged.
+
+**Dashboard.** Summary cards by status; a filterable, paged list; incident detail (fields, events with copyable IDs, the experimental-score label); a form to change
+status, title and notes; add events by pasted ID or remove them; and "Create an incident" from a shared indicator (the correlation view's grouping) or from event IDs.
+Without `INGEST_API_KEY` every control that writes is replaced by a "Read-only" explanation and nothing is sent. An incident is a work item, not a confirmed attack.

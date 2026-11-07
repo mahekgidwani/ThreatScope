@@ -13,9 +13,5 @@ def _coming(title: str, description: str, task: int) -> None:
                     unsafe_allow_html=True)
 
 
-def incidents() -> None:
-    _coming("Incidents", "Group related events and track the investigation", 5)
-
-
 def reports() -> None:
     _coming("Reports", "Summaries and CSV exports of stored data", 6)

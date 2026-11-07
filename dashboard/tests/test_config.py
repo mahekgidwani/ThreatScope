@@ -41,11 +41,32 @@ def test_validation_error_never_echoes_the_bad_value():
     assert "supersecret" not in str(caught.value)
 
 
-def test_the_dashboard_holds_no_api_key(monkeypatch, tmp_path):
-    monkeypatch.setenv("INGEST_API_KEY", "0123456789abcdef0123456789abcdef")
+KEY = "0123456789abcdefSECRETKEY"
+
+
+def test_the_api_key_is_optional_and_off_by_default(monkeypatch):
+    monkeypatch.delenv("INGEST_API_KEY", raising=False)
+    assert DashboardSettings(_env_file=None).ingest_api_key is None
+
+
+def test_the_api_key_is_read_from_the_environment_or_env_file_and_never_printed(monkeypatch, tmp_path):
+    monkeypatch.setenv("INGEST_API_KEY", KEY)
+    from_env = DashboardSettings(_env_file=None)
+    assert from_env.ingest_api_key.get_secret_value() == KEY
+    assert KEY not in repr(from_env) and KEY not in str(from_env) and KEY not in str(from_env.model_dump()) and KEY not in from_env.model_dump_json()
+    monkeypatch.delenv("INGEST_API_KEY")
     env_file = tmp_path / ".env"
-    env_file.write_text("INGEST_API_KEY=abcdefabcdefabcdef12\nPOSTGRES_PASSWORD=hunter2hunter2\n")
-    settings = DashboardSettings(_env_file=env_file)
-    dumped = repr(settings) + str(settings.model_dump())
-    assert "abcdefabcdef" not in dumped and "hunter2" not in dumped and "0123456789abcdef" not in dumped
-    assert set(DashboardSettings.model_fields) == {"threatscope_api_url", "threatscope_timeout_seconds"}
+    env_file.write_text(f"INGEST_API_KEY={KEY}\nPOSTGRES_PASSWORD=hunter2hunter2\n")
+    from_file = DashboardSettings(_env_file=env_file)
+    assert from_file.ingest_api_key.get_secret_value() == KEY
+    assert "hunter2" not in repr(from_file) + str(from_file.model_dump())          # other secrets in .env are ignored
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_blank_key_means_read_only(monkeypatch, blank):
+    monkeypatch.setenv("INGEST_API_KEY", blank)
+    assert DashboardSettings(_env_file=None).ingest_api_key is None
+
+
+def test_only_these_settings_exist():
+    assert set(DashboardSettings.model_fields) == {"threatscope_api_url", "threatscope_timeout_seconds", "ingest_api_key"}

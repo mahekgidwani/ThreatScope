@@ -116,6 +116,10 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible, [tabindex]
 .ts-tag { display: inline-block; padding: 0 8px; border-radius: 6px; font-size: 11.5px; color: var(--ts-accent);
   border: 1px solid color-mix(in srgb, var(--ts-accent) 45%, transparent); margin-left: 4px; white-space: nowrap; }
 
+.st-open { --c: #22D3EE; }
+.st-investigating { --c: #A78BFA; }
+.st-closed { --c: #9AA9C0; }
+
 /* states */
 .ts-state { display: flex; gap: 14px; align-items: flex-start; padding: 18px 4px; }
 .ts-state svg { flex: none; width: 22px; height: 22px; margin-top: 2px; }

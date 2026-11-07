@@ -1,9 +1,11 @@
-"""The dashboard's only way to reach ThreatScope: read-only HTTP calls to the FastAPI backend.
+"""The dashboard's only way to reach ThreatScope: HTTP calls to the FastAPI backend.
 
     Dashboard -> this client -> FastAPI -> services -> PostgreSQL
 
-Endpoints used (all GET, none needs the API key):
-    /health   /api/v1/events   /api/v1/events/{id}   /api/v1/indicators   /api/v1/incidents
+Reads (GET, no API key):
+    /health   /api/v1/events   /api/v1/events/{id}   /api/v1/indicators   /api/v1/incidents   /api/v1/incidents/{id}
+Incident writes (need INGEST_API_KEY, sent only as the X-API-Key header, never logged or shown):
+    POST /api/v1/incidents   PATCH /api/v1/incidents/{id}
 
 Every failure becomes an `ApiError` subclass with a plain `user_message` the UI can show as it is, so a
 page never has to catch httpx or pydantic errors, and the dashboard never crashes because the API is down.
@@ -12,14 +14,14 @@ Nothing is cached here: whatever this returns was just read from the API.
 import logging
 import re
 from datetime import datetime
-from typing import Any, Mapping, TypeVar
+from typing import Any, Mapping, Sequence, TypeVar
 from uuid import UUID
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
 from ts_dashboard.config import DashboardSettings
-from ts_dashboard.models import Event, Health, Incident, Indicator, Page
+from ts_dashboard.models import Event, Health, Incident, IncidentDetail, Indicator, Page
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +38,11 @@ class ApiError(Exception):
     retryable = False
     user_message = "ThreatScope could not complete the request."
 
-    def __init__(self, message: str, status_code: int | None = None, api_code: str | None = None):
+    def __init__(self, message: str, status_code: int | None = None, api_code: str | None = None, detail: str | None = None):
         super().__init__(message)
         self.status_code = status_code
         self.api_code = api_code
+        self.detail = detail      # the API's own short reason (field names and rules, never the submitted values)
 
 
 class ApiConnectionError(ApiError):
@@ -60,7 +63,14 @@ class ApiServerError(ApiError):
 
 
 class ApiAuthError(ApiError):
-    user_message = "The ThreatScope API refused the request (authentication)."
+    user_message = "The ThreatScope API refused the request (authentication). Check INGEST_API_KEY."
+
+
+class ApiWriteDisabledError(ApiAuthError):
+    """No API key is configured, so no request was sent."""
+
+    user_message = ("Editing is turned off: this dashboard has no API key. Set INGEST_API_KEY in .env (the key the API uses) "
+                    "and restart the dashboard.")
 
 
 class ApiNotFoundError(ApiError):
@@ -70,7 +80,11 @@ class ApiNotFoundError(ApiError):
 class ApiRejectedError(ApiError):
     """Other 4xx, mostly 422: a filter or paging value the API does not accept."""
 
-    user_message = "The ThreatScope API did not accept those filters."
+    @property
+    def user_message(self) -> str:  # type: ignore[override]
+        if self.detail:
+            return f"The ThreatScope API did not accept that: {self.detail}."
+        return "The ThreatScope API did not accept those filters."
 
 
 class ApiResponseError(ApiError):
@@ -86,6 +100,7 @@ class ThreatScopeApi:
 
     def __init__(self, settings: DashboardSettings, http_client: httpx.Client | None = None):
         self._owns_http = http_client is None
+        self._key = settings.ingest_api_key.get_secret_value() if settings.ingest_api_key else None
         # trust_env=False: ignore HTTP(S)_PROXY variables, so requests only go where the settings say.
         self._http = http_client or httpx.Client(
             base_url=settings.threatscope_api_url,
@@ -105,6 +120,10 @@ class ThreatScopeApi:
     def close(self) -> None:
         if self._owns_http:
             self._http.close()
+
+    @property
+    def can_write(self) -> bool:
+        return self._key is not None
 
     # -- endpoints --
 
@@ -140,7 +159,43 @@ class ThreatScopeApi:
         params = {"status": status, "limit": limit, "offset": offset}
         return self._parse(self._get("/api/v1/incidents", params), Page[Incident])
 
+    def get_incident(self, incident_id: int) -> IncidentDetail:
+        return self._parse(self._get(f"/api/v1/incidents/{int(incident_id)}", None), IncidentDetail)
+
+    def create_incident(self, title: str, event_ids: Sequence[UUID | str], summary: str | None = None) -> IncidentDetail:
+        """Group existing events into an incident. Severity and risk come from the events (the API decides)."""
+        body: dict[str, Any] = {"title": title, "event_ids": [str(UUID(str(i))) for i in event_ids]}
+        if summary:
+            body["summary"] = summary
+        return self._parse(self._write("POST", "/api/v1/incidents", body), IncidentDetail)
+
+    def update_incident(self, incident_id: int, *, status: str | None = None, title: str | None = None,
+                        summary: str | None = None, clear_summary: bool = False,
+                        add_event_ids: Sequence[UUID | str] = (), remove_event_ids: Sequence[UUID | str] = ()) -> IncidentDetail:
+        """Change only what is given. `clear_summary=True` empties the notes."""
+        body: dict[str, Any] = {k: v for k, v in (("status", status), ("title", title)) if v is not None}
+        if clear_summary:
+            body["summary"] = None
+        elif summary is not None:
+            body["summary"] = summary
+        if add_event_ids:
+            body["add_event_ids"] = [str(UUID(str(i))) for i in add_event_ids]
+        if remove_event_ids:
+            body["remove_event_ids"] = [str(UUID(str(i))) for i in remove_event_ids]
+        return self._parse(self._write("PATCH", f"/api/v1/incidents/{int(incident_id)}", body), IncidentDetail)
+
     # -- helpers --
+
+    def _write(self, method: str, path: str, body: Mapping[str, Any]) -> httpx.Response:
+        if self._key is None:
+            raise ApiWriteDisabledError("no API key configured; request not sent")
+        try:
+            response = self._http.request(method, path, json=body, headers={"X-API-Key": self._key}, follow_redirects=False)
+        except httpx.TimeoutException as exc:
+            raise self._failed(ApiTimeoutError("timed out waiting for the ThreatScope API")) from exc
+        except httpx.HTTPError as exc:
+            raise self._failed(ApiConnectionError(f"could not reach the ThreatScope API ({type(exc).__name__})")) from exc
+        return self._ok(response)
 
     def _get(self, path: str, params: Mapping[str, Any] | None) -> httpx.Response:
         return self._ok(self._send(path, params))
@@ -159,7 +214,7 @@ class ThreatScopeApi:
         status = response.status_code
         if 200 <= status < 300:
             return response
-        code, message = self._error_parts(response)
+        code, message, detail = self._error_parts(response)
         text = f"ThreatScope API answered HTTP {status}" + (f" {code}" if code else "")
         if message:
             text += f": {message}"
@@ -168,21 +223,32 @@ class ThreatScopeApi:
         if status == 404:
             raise self._failed(ApiNotFoundError(text, status, code))
         if 400 <= status < 500:
-            raise self._failed(ApiRejectedError(text, status, code))
+            raise self._failed(ApiRejectedError(text, status, code, detail))
         if status >= 500:
             raise self._failed(ApiServerError(text, status, code))
         raise self._failed(ApiResponseError(text, status, code))  # 1xx / 3xx: redirects are never followed
 
     @staticmethod
-    def _error_parts(response: httpx.Response) -> tuple[str | None, str | None]:
+    def _error_parts(response: httpx.Response) -> tuple[str | None, str | None, str | None]:
+        """(code, message, detail). `detail` = the first validation problems as 'field: rule' (the API never echoes values)."""
         try:
             error = response.json().get("error")
         except (ValueError, AttributeError):
-            return None, None
+            return None, None, None
         if not isinstance(error, dict):
-            return None, None
-        code, message = error.get("code"), error.get("message")
-        return (code if isinstance(code, str) else None), (message if isinstance(message, str) else None)
+            return None, None, None
+        code, message, details = error.get("code"), error.get("message"), error.get("details")
+        parts = []
+        if isinstance(details, list):
+            for d in details[:3]:
+                if isinstance(d, dict) and isinstance(d.get("msg"), str):
+                    where = d.get("loc")
+                    field = str(where[-1]) if isinstance(where, list) and where else ""
+                    parts.append(f"{field}: {d['msg']}" if field else d["msg"])
+        if not parts and code == "invalid_filter" and isinstance(message, str):
+            parts.append(message)         # e.g. "an incident must keep at least one event": the API's own rule text
+        detail = _CONTROL_CHARS.sub(" ", "; ".join(parts))[:200] or None
+        return (code if isinstance(code, str) else None), (message if isinstance(message, str) else None), detail
 
     def _parse(self, response: httpx.Response, model: type[M], allow_error_status: bool = False) -> M | None:
         try:
@@ -194,9 +260,13 @@ class ThreatScopeApi:
             raise self._failed(ApiResponseError(
                 f"unusable answer for {model.__name__} ({type(exc).__name__})", response.status_code)) from exc
 
-    @staticmethod
-    def _failed(error: ApiError) -> ApiError:
-        error.args = (_CONTROL_CHARS.sub(" ", str(error))[:MAX_ERROR_TEXT],)
+    def _failed(self, error: ApiError) -> ApiError:
+        text = _CONTROL_CHARS.sub(" ", str(error))
+        if self._key:
+            text = text.replace(self._key, "***")     # the key must never reach a log line, whatever the server echoes
+            if error.detail:
+                error.detail = error.detail.replace(self._key, "***")
+        error.args = (text[:MAX_ERROR_TEXT],)
         logger.warning("ThreatScope API call failed: %s", error)
         return error
 

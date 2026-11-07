@@ -70,6 +70,13 @@ class Incident(_Model):
     created_at: AwareDatetime
     updated_at: AwareDatetime
     summary: str | None = None
+    event_count: int = Field(default=0, ge=0)
+
+
+class IncidentDetail(Incident):
+    """An incident with the events it groups, newest first."""
+
+    events: list[Event] = Field(default_factory=list)
 
 
 class Page(_Model, Generic[T]):

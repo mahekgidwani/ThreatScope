@@ -48,10 +48,19 @@ def test_only_the_client_touches_the_network():
             assert not imported_modules(path) & NETWORK_LIBRARIES, path.name
 
 
-def test_the_dashboard_never_handles_the_ingest_key():
+KEY_HANDLERS = {"config.py", "api_client.py"}
+
+
+def test_the_ingest_key_is_handled_only_by_the_settings_and_the_client():
     for path in SOURCES:
         code = "".join(line.split("#")[0] for line in path.read_text(encoding="utf-8").splitlines()).lower()
-        assert "x-api-key" not in code and "ingest_api_key" not in code, path.name
+        if path.name not in KEY_HANDLERS:
+            assert "x-api-key" not in code and "ingest_api_key" not in code and "get_secret_value" not in code, path.name
+
+
+def test_the_header_is_set_in_exactly_one_place():
+    code = (DASHBOARD / "ts_dashboard" / "api_client.py").read_text(encoding="utf-8")
+    assert code.count('"X-API-Key"') == 1
 
 
 def test_streamlit_is_only_used_by_the_entry_point_and_the_views():

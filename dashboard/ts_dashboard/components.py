@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from html import escape
 from typing import Sequence
 
-from ts_dashboard.models import Event, Health, Indicator
+from ts_dashboard.models import Event, Health, Incident, Indicator
 from ts_dashboard.theme import INDICATOR_LABELS, SEVERITY_COLOURS, SEVERITY_LABELS, SOURCE_LABELS
 
 _ICON_INFO = ('<svg viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="1.8" stroke-linecap="round" '
@@ -231,3 +231,35 @@ def clusters_table(clusters: Sequence) -> str:
                      f'<span class="ts-nowrap ts-muted">{escape(fmt_time_short(k.last_seen))}</span>'])
     return table([("Type", False), ("Shared indicator", False), ("Events", True), ("Sources", False), ("Highest severity", False),
                   ("Max risk", True), ("Latest (UTC)", False)], rows)
+
+
+# ---- incidents ------------------------------------------------------------------------------
+
+_STATUS_LABELS = {"open": "Open", "investigating": "Investigating", "closed": "Closed"}
+
+
+def status_badge(status: str) -> str:
+    known = status if status in _STATUS_LABELS else "closed"
+    return f'<span class="ts-badge st-{known}">{escape(_STATUS_LABELS.get(status, status))}</span>'
+
+
+def incidents_table(incidents: Sequence[Incident]) -> str:
+    rows = [[f"<strong>#{i.id}</strong>", cell_text(i.title, 70), status_badge(i.status), severity_badge(i.severity),
+             f"<strong>{i.risk_score}</strong>", f"{i.event_count}",
+             f'<span class="ts-nowrap ts-muted">{escape(fmt_time_short(i.updated_at))}</span>'] for i in incidents]
+    return table([("ID", False), ("Title", False), ("Status", False), ("Severity", False), ("Risk", True), ("Events", True),
+                  ("Updated (UTC)", False)], rows)
+
+
+def incident_detail(incident: Incident) -> str:
+    return definition_list([
+        ("Incident", f"<strong>#{incident.id}</strong>"),
+        ("Title", cell_text(incident.title)),
+        ("Status", status_badge(incident.status)),
+        ("Severity", severity_badge(incident.severity) + ' <span class="ts-muted">highest of its events</span>'),
+        ("Risk score", f'<strong>{incident.risk_score}</strong> <span class="ts-muted">/ 100, highest of its events</span>'),
+        ("Events", f"<strong>{incident.event_count}</strong>"),
+        ("Created", cell_text(fmt_time(incident.created_at))),
+        ("Last updated", cell_text(fmt_time(incident.updated_at))),
+        ("Notes", cell_text(incident.summary) if incident.summary else cell_muted("none yet")),
+    ])

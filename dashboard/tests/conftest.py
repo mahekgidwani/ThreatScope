@@ -16,7 +16,7 @@ def make_api(handler) -> tuple[ThreatScopeApi, list[httpx.Request]]:
         return handler(request)
 
     http = httpx.Client(base_url=BASE, transport=httpx.MockTransport(recording))
-    return ThreatScopeApi(DashboardSettings(_env_file=None), http_client=http), seen
+    return ThreatScopeApi(DashboardSettings(_env_file=None, ingest_api_key=None), http_client=http), seen
 
 
 @pytest.fixture

@@ -1,13 +1,14 @@
 """Dashboard settings: where the API is and how long to wait.
 
 Same variable names as the Phase 3 adapters (THREATSCOPE_API_URL, THREATSCOPE_TIMEOUT_SECONDS).
-There is deliberately NO API-key setting: every GET endpoint the dashboard uses is open, only
-POST /api/v1/events needs the key, and the dashboard never writes. A dashboard that does not
-hold the key cannot leak it. `.env` is read, but its other keys (database password, ingest key) are ignored.
+Reading needs no key: every GET endpoint is open. Only the incident WRITES (create, change status / notes / events)
+need the API key, so `INGEST_API_KEY` is optional here: without it the dashboard is read-only. The key is a SecretStr,
+is sent only as the X-API-Key header on those write calls, and is never shown or logged. `.env` is read, but its other
+keys (database password, ...) are ignored.
 """
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +22,12 @@ class DashboardSettings(BaseSettings):
 
     threatscope_api_url: str = "http://127.0.0.1:8000"
     threatscope_timeout_seconds: float = Field(default=10, gt=0, le=120)
+    ingest_api_key: SecretStr | None = None   # optional: enables incident editing
+
+    @field_validator("ingest_api_key")
+    @classmethod
+    def _blank_key_means_none(cls, value: SecretStr | None) -> SecretStr | None:
+        return value if value is not None and value.get_secret_value().strip() else None
 
     @field_validator("threatscope_api_url")
     @classmethod
