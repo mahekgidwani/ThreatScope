@@ -3,7 +3,6 @@ import json
 
 import httpx
 import pytest
-from pydantic import ValidationError
 
 from integrations.analyse_file import main
 from integrations.client import ThreatScopeClient

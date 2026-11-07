@@ -4,8 +4,6 @@ import time
 import tracemalloc
 import zipfile
 
-import pytest
-
 from integrations.file_analyser import analyse_file
 from tests.integrations.samples import (
     REL_BASE, make_docx, make_jpeg, make_pdf, make_png, make_rels, write,

@@ -328,3 +328,43 @@ legitimate-domain list except the optional `--trusted`; short or generic keyword
 nothing can say a domain is actually used for abuse.
 Tests: 101 new (full suite 954: 747 without PostgreSQL, 207 PostgreSQL-only). Mutation checks: skipping the punycode decode,
 ignoring the trusted list, dropping the keyword from the event id and removing the lower-casing each made tests fail.
+
+### Task 4 - ModSecurity honeypot adapter (done)
+Files: `backend/integrations/modsec_parser.py` (record -> event), `modsec_adapter.py` (command line, incremental reading),
+`textutil.py` (shared `clean()`), tests `test_modsec_{parser,adapter}.py` + `modsec_samples.py`, `third_party/NOTICE.md`.
+Small refactors of my own earlier code: `positive_int` moved to `cli_common.py` (also used by the openSquat CLI);
+`file_analyser.printable` now calls `textutil.clean`; unused test imports removed.
+What the honeypot actually logs (read from its configs and its sample record, nothing was run or modified): ModSecurity writes
+`SecAuditLogFormat JSON` + `SecAuditLogType Serial` to `/var/log/modsec_audit.log`, i.e. ONE JSON OBJECT PER LINE. Keys used:
+`transaction.{time,transaction_id,remote_address}`, `request.{request_line,headers}`, `response.status`,
+`audit_data.{messages,action,producer}`. Each rule hit is one string in `audit_data.messages` in ModSecurity's
+`[id "941100"] [msg "..."] [data "..."] [severity "CRITICAL"] [tag "attack-xss"]` layout. Time is Apache style
+(`08/Jan/2020:09:29:17 +0000`). The "v1.1" schema in its docs is what its Logstash pipeline sends to Elasticsearch; it is not a
+file on disk, so it is not read. The project's CHAMELEON stack logs part `C` (request body), so bodies can appear in real logs.
+Use: `docker compose exec backend python -m integrations.modsec_adapter /path/to/modsec_audit.log --state /path/state.json
+[--max-events N] [--dry-run]` (mount or copy the log into the container; it is only read).
+Event: `source=honeypot`, `source_ip` = attacker address, `occurred_at` from the transaction time (a bad or zone-less time skips
+the record, it is never guessed). `event_type` by main category: `xss_attempt`, `sqli_attempt`, `lfi_attempt`, `rfi_attempt`,
+`rce_attempt`, `php_injection_attempt`, `scanner_probe`, `protocol_anomaly`, ... or `waf_alert`. The category is the one with the
+most severity-weighted rule hits (tags first, rule number as fallback); protocol/scanner noise only decides when nothing else
+fired; all categories and scores stay in `metadata.attack_categories` (the sample XSS request also trips SQLi rules: 20 vs 19).
+Evaluation rules (949/959/980) are ignored, so a record with only those is "no rule hits", not an event. Severity: highest rule
+severity, EMERGENCY/ALERT -> critical, CRS CRITICAL -> high, ERROR -> medium, WARNING -> low, rest -> info.
+Kept: rule ids/messages/severities, CVE tags, honeytrap rule ids (9500000-9999999), blocked flag, response status, CRS version,
+method, path (200 chars), a query summary (values cut to 100 chars; values of password/token/key/session-like parameters replaced
+by `[redacted]`), Host, User-Agent, Content-Type. NEVER kept: request/response bodies, cookies or any other header, response
+headers (the bait `Set-Cookie`), and the `[data "..."]` part of rule messages. Nothing goes into `url`/`domain`/`destination_ip`
+(the honeypot's own address would link every attack); the event's only indicator is the source IP.
+Duplicates and incremental reading: `external_event_id = modsec:<hash(transaction_id)>` (fallback: time + IP + request line), so
+re-reading the log is harmless. With `--state` the tool saves `{offset, head_length, head_hash}` (no secrets) after each run: only
+new complete lines are read; a half-written last line waits for the next run; a different or shorter file (rotation) is read from
+the start; corrupt state means start from the beginning. If the API is down or the key is wrong the run stops and the failing line
+is retried next time; events the API rejects (422) are counted and skipped so one bad record cannot block the log.
+Hostile input: over-long lines (> 1 MB) are skipped unread, invalid UTF-8 is replaced, deeply nested JSON is just an invalid line,
+messages are capped (200 per record, 20,000 characters each, bounded regexes), a crash inside the parser is contained per line.
+Limits: only the JSON audit format; no `--follow` mode (run it from a scheduler); a rule message whose quotes are NOT escaped by
+ModSecurity could confuse field parsing (ModSecurity escapes them as \x22); the attack category is a heuristic, not a verdict.
+Tests: 144 new (full suite 1098: 890 without PostgreSQL, 208 PostgreSQL-only). Mutation checks (8): redaction off, evaluation rules
+counted, rotation check off, half-written line consumed, cookie header stored, `url` added, CRITICAL->critical, offset advanced
+after a connection failure: all made tests fail. Real sample record (dry run): classified XSS, 10 rules, severity high, blocked,
+no payload outside the 100-char query preview. Dev database untouched.

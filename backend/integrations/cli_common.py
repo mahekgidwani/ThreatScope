@@ -1,4 +1,5 @@
 """Small pieces every adapter command line shares."""
+import argparse
 import sys
 
 from pydantic import ValidationError
@@ -19,3 +20,10 @@ def connect(settings_loader=load_settings) -> ThreatScopeClient | None:
         return None
     configure_logging("WARNING", secrets=[settings.ingest_api_key.get_secret_value()])
     return ThreatScopeClient(settings)
+
+
+def positive_int(text: str) -> int:
+    """argparse type: a whole number >= 1."""
+    if not text.isdigit() or int(text) < 1:
+        raise argparse.ArgumentTypeError("must be a positive whole number")
+    return int(text)

@@ -30,6 +30,7 @@ from urllib.parse import urlsplit
 
 from app.schemas.event import normalise_domain
 from integrations.client import stable_event_id
+from integrations.textutil import clean
 from integrations.file_formats import (
     PNG_SIGNATURE, FormatResult, inspect_zip, parse_jpeg, parse_pdf, parse_png,
 )
@@ -99,10 +100,8 @@ class FileReport:
 
 
 def printable(text: str, limit: int = MAX_NAME_LENGTH) -> str:
-    """Text safe for descriptions, JSON and terminals: valid UTF-8, no control characters, short."""
-    text = text.encode("utf-8", "replace").decode("utf-8")
-    text = "".join(ch if ch.isprintable() else "?" for ch in text).strip()
-    return text[:limit] or "unnamed"
+    """`clean` text, or "unnamed" when nothing is left (for file names)."""
+    return clean(text, limit) or "unnamed"
 
 
 # ---- indicators ---------------------------------------------------------------------------

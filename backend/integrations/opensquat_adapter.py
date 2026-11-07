@@ -17,7 +17,7 @@ from itertools import islice
 from integrations.client import (
     ApiAuthError, ApiConnectionError, ApiTimeoutError, IntegrationError,
 )
-from integrations.cli_common import connect
+from integrations.cli_common import connect, positive_int
 from integrations.config import load_settings
 from integrations.opensquat_detector import build_event, clean_keyword, find_squatting, prepare_domain
 
@@ -35,12 +35,6 @@ def _confidence(text: str) -> int:
     return value
 
 
-def _positive(text: str) -> int:
-    if not text.isdigit() or int(text) < 1:
-        raise argparse.ArgumentTypeError("must be a positive whole number")
-    return int(text)
-
-
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="opensquat_adapter", description=__doc__.split("\n\n")[0])
     parser.add_argument("--keywords", help="file with one brand keyword per line")
@@ -49,7 +43,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--trusted", help="file of domains to skip (the brand's own domains)")
     parser.add_argument("--confidence", type=_confidence, default=1,
                         help="0 (very high) .. 4 (very low); larger = more, weaker findings (default 1)")
-    parser.add_argument("--max-events", type=_positive, default=DEFAULT_MAX_EVENTS,
+    parser.add_argument("--max-events", type=positive_int, default=DEFAULT_MAX_EVENTS,
                         help=f"stop after this many findings (default {DEFAULT_MAX_EVENTS})")
     parser.add_argument("--dry-run", action="store_true", help="print the events, send nothing")
     return parser
