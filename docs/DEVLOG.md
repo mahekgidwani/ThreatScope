@@ -30,6 +30,26 @@ Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL majo
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
 
+### Task 6 - Indicator extraction and experimental risk score (done)
+Files: `backend/app/services/{indicator_extractor,risk_scoring}.py`, tests `tests/unit/test_indicator_extractor.py`
+and `tests/unit/test_risk_scoring.py`. Both modules are pure functions: no database, no web framework.
+Indicator extractor: an "indicator" is a value worth matching across events (an IP, domain, URL or file hash).
+`extract_indicators(event)` returns them in a fixed order, each once: source IP, destination IP, domain, URL, the URL's
+host, file hash. The URL's host becomes a domain indicator (or an IP indicator if the host is an IP). The destination IP
+counts only for `network` events: for honeypot events it is our own address, and using it would make every attack look
+related to every other. A host that is not a valid hostname (for example `_dmarc.example`) is skipped, the URL itself is
+still kept, and ingestion never fails because of it.
+Risk score (experimental, rule-based): `compute_risk(severity, source, prior_sightings)` returns `(score, factors)`.
+Points: severity info 0 / low 10 / medium 25 / high 40 / critical 55; source honeypot 15 / file 10 / domain 5 / network 5;
+repeat bonus +5 for each EARLIER event that mentioned the same indicator, capped at +20. `prior_sightings` never counts the
+event being scored, so the first sighting gets +0, the second +5, the third +10, the fifth and later +20. Examples:
+`high` honeypot first sighting = 40 + 15 + 0 = 55; `critical` honeypot first sighting = 70; the highest possible is 90.
+`factors` lists every line of the sum so the score can be explained. It is a prioritisation aid, not a probability of
+compromise, and it is separate from `severity`.
+Tests: 79 (extractor 17 cases, scoring incl. the whole schedule 0/5/10/15/20/20/20). Mutation check: counting the current
+event as a prior sighting and ignoring the network-only rule made 36 tests fail; restored, all pass.
+Command: `docker compose run --rm --no-deps backend pytest -q tests/unit`.
+
 ### Task 5 - Pydantic schemas: the API contract (done)
 Files: `backend/app/schemas/{common,event,indicator,incident,health}.py`, tests `tests/unit/test_event_schema.py`
 and `tests/unit/test_output_schemas.py`.
