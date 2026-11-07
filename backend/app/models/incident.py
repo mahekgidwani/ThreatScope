@@ -1,12 +1,12 @@
 """`incidents` (groups of related events) and the `incident_events` link table.
 
-Rows are created by the correlation logic in Phase 4; Phase 2 only provides the tables.
+Rows are created through the incident API (Phase 4); Phase 2 provided the tables.
 """
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text, Uuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text, Uuid, func, select
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.db import Base
 from app.enums import IncidentStatus, Severity
@@ -45,3 +45,9 @@ class IncidentEvent(Base):
         Integer, ForeignKey("incidents.id", ondelete="CASCADE"), primary_key=True)
     event_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("events.id", ondelete="CASCADE"), primary_key=True)
+
+
+# How many events an incident groups. A query-time count (no new column, no schema change).
+Incident.event_count = column_property(
+    select(func.count()).select_from(IncidentEvent).where(IncidentEvent.incident_id == Incident.id)
+    .correlate_except(IncidentEvent).scalar_subquery())

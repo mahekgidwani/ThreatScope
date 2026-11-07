@@ -16,7 +16,10 @@ Phase 4. See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 - `POST /api/v1/events` stores one event (needs an API key), extracts indicators (IPs, domains, URLs, hashes), counts
   sightings and gives the event an experimental [risk score](docs/RISK_SCORING.md).
 - `GET /api/v1/events` lists events (7 filters, paging, newest first); `GET /api/v1/events/{id}` fetches one.
-- `GET /api/v1/indicators` and `GET /api/v1/incidents` list indicators and incidents (no incidents exist before Phase 4).
+- `GET /api/v1/indicators` lists indicators.
+- Incidents (Phase 4): `GET /api/v1/incidents` lists them, `GET /api/v1/incidents/{id}` returns one with its events,
+  `POST /api/v1/incidents` groups existing events into an incident and `PATCH /api/v1/incidents/{id}` changes its status,
+  title, notes or events (both writes need the API key). Severity and risk score come from the grouped events.
 - `GET /health` reports the API and PostgreSQL **separately** plus overall readiness.
 - Interactive API documentation at `http://127.0.0.1:8000/docs`.
 - **Adapters** (run in the backend container, each with `--dry-run`; they only call the API, never the database):
