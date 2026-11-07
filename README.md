@@ -4,8 +4,10 @@ Unified cyber threat detection and monitoring platform (college project). It col
 domain-squatting detection, a web honeypot, file analysis and network monitoring into **one PostgreSQL database**
 behind a **FastAPI** backend.
 
-**Status: Phase 2 (backend foundation) complete.** The API stores, scores and serves events. The source adapters
-(domain, honeypot, file, network), correlation, incidents and the dashboard arrive in Phases 3-4.
+**Status: Phase 3 (integrations) complete for three of four sources.** The API stores, scores and serves events, and
+adapters now collect them from **file analysis, domain look-alike detection (openSquat-derived) and a ModSecurity web
+honeypot log**. Network monitoring was evaluated (Zeek) and deferred. Correlation, incidents and the dashboard arrive in
+Phase 4. See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 > The project folder is spelled `ThreaScope` (`F:\ThreaScope`); the product name is ThreatScope. Nothing is renamed.
 
@@ -17,6 +19,11 @@ behind a **FastAPI** backend.
 - `GET /api/v1/indicators` and `GET /api/v1/incidents` list indicators and incidents (no incidents exist before Phase 4).
 - `GET /health` reports the API and PostgreSQL **separately** plus overall readiness.
 - Interactive API documentation at `http://127.0.0.1:8000/docs`.
+- **Adapters** (run in the backend container, each with `--dry-run`; they only call the API, never the database):
+  - `python -m integrations.analyse_file PATH...` static file analysis (hashes, type, structure, IPs/domains/URLs; nothing is executed)
+  - `python -m integrations.opensquat_adapter --keyword WORD --domains FEED` look-alike domains (typosquats, IDN homographs)
+  - `python -m integrations.modsec_adapter AUDIT.log --state STATE.json` ModSecurity attack events, incremental
+  - Findings are leads, not verdicts: events say so, and re-running an adapter never stores anything twice.
 
 ## Requirements
 
@@ -93,7 +100,7 @@ Responses never contain SQL, stack traces, credentials or the value you sent.
 ## Tests
 
 ```powershell
-docker compose run --rm backend pytest -q                    # everything: SQLite + real PostgreSQL
+docker compose run --rm backend pytest -q                    # everything: SQLite + real PostgreSQL (1147 tests)
 docker compose run --rm backend pytest -q -m "not postgres"  # quick loop (SQLite only)
 docker compose run --rm backend pytest -q -m postgres        # PostgreSQL-only tests
 ```
@@ -112,7 +119,11 @@ docker compose run --rm backend pytest -q -m postgres        # PostgreSQL-only t
 - **Local-only by design.** Docker publishes ports 8000 and 5432 on `127.0.0.1` only. **Read endpoints are
   intentionally unauthenticated for this local MVP** and there is no TLS. Never expose the API to a network, forward the
   port, or change the port mapping to `0.0.0.0`. Add authentication and TLS first if that is ever needed.
-- Original reference repositories are never modified; see `third_party/NOTICE.md` for attribution and licences.
+- Original reference repositories are never modified; see `third_party/NOTICE.md` for attribution and licences. openSquat
+  logic is adapted under GPL-3.0 with its notice kept; nothing is copied from the honeypot project (licence unverified).
+- Adapters never log or store the API key, request/response bodies, cookies or rule payloads. Their end-to-end tests run a
+  real server on the **test** database and scan stored data and the server log for secrets.
+- Docker's data file lives on C:. If C: is nearly full, free space before building or pulling images.
 
 ## Database and `create_all` (limitations)
 
@@ -145,8 +156,9 @@ Tables: `events`, `indicators`, `event_indicators`, `incidents`, `incident_event
 backend/app/        config.py  db.py  enums.py  errors.py  logging_config.py  main.py
   models/           the five tables       schemas/   the API contract (Pydantic)
   services/         event_service, indicator_extractor, risk_scoring, ...      api/   thin routers
-backend/tests/      unit/  db/  api/      (SQLite + PostgreSQL)
-docs/               PHASE1_AUDIT.md  DEVLOG.md  RISK_SCORING.md  superpowers/specs  superpowers/plans
+backend/integrations/  client, config, file analyser, openSquat adapter, ModSecurity adapter   (Phase 3)
+backend/tests/      unit/  db/  api/  integrations/      (SQLite + PostgreSQL)
+docs/               INTEGRATIONS.md  NETWORK_DECISION.md  PHASE1_AUDIT.md  DEVLOG.md  RISK_SCORING.md  superpowers/
 third_party/NOTICE.md   attribution
 ```
 

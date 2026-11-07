@@ -380,3 +380,30 @@ containers). Option 2 (a simpler adapter) has no honest data source and would me
 offline mode only** (Zeek on a recorded pcap in a throw-away container, adapter reads Zeek's own `notice.log`), conditional on three
 approvals: G1 free disk safely (prune only Docker build cache), G2 pull `zeek/zeek`, G3 a pcap that contains a real detection.
 Without G1 the answer is option 3 (defer), and nothing else in Phase 3 depends on it.
+
+### Task 6 - End-to-end tests and documentation (done)
+Files: `backend/tests/integrations/test_architecture.py`, `test_end_to_end.py`, `docs/INTEGRATIONS.md`, README, `.env.example`,
+`docs/NETWORK_DECISION.md` (status), this log.
+Decision recorded: the Zeek approvals (G1-G3) were not given, so network monitoring is deferred (option 3); Task 6 went ahead.
+Architecture guard (38 tests, no database needed): reads the adapter source and fails if any adapter imports a database library
+or a backend service/model, runs anything (`subprocess`, `eval`, `exec`, pickle, dynamic import, `os.system`), imports a network
+library other than in `client.py`, calls more than the one endpoint, or mentions the reference key files.
+End to end (11 tests, PostgreSQL, mandatory): a fixture starts a REAL `uvicorn` server on `127.0.0.1` inside the test container with
+`DATABASE_URL` pointing at `threatscope_test` (the name is checked by the existing test guard first), then runs the real
+command lines of all three adapters over real HTTP using the same input material. Checks: 8 events stored (2 file, 3 domain,
+3 honeypot) with exact risk scores (10, 20, 30, 15, 30, 55, 55, 60); indicators created by the API only (sha256, domain, IP;
+sighting count 2 for the repeated attacker IP; honeypot address and file-internal values are not indicators); a second run of
+everything stores nothing and leaves sighting counts unchanged; filters work; wrong key stores nothing and every CLI says so;
+unreachable API reported by every CLI; dry runs store nothing; incremental honeypot reading over HTTP; the stored data and the
+server log contain no API key, DB password, request canary, password value or request line; the development database name is
+never used.
+Mutation checks: no API key header (6 tests fail), URL query kept (2), a database import in an adapter (1), query redaction off (1).
+One survivor, dropping the keyword from the openSquat event id, is covered by Task 3's unit tests; the end-to-end run uses one keyword.
+Totals: 1147 tests (685 Phase 2 + 462 Phase 3), 928 without PostgreSQL, 219 PostgreSQL-only, no skips. Dev database: still exactly
+the two demo events; ports still `127.0.0.1` only.
+
+## Phase 3 summary
+Branch `phase3/integrations`. Commits: shared client (a0dfa6b), file analyser (5887b3e), openSquat adapter (e8ba7e4), ModSecurity
+adapter (cb72f0a), Zeek evaluation (9dfdaba), end-to-end tests and documentation (Task 6). New dependencies: `httpx` (moved to
+runtime), `confusable_homoglyphs`, `homoglyphs` (MIT, from openSquat). No change to `backend/app/`. Deferred Phase 2 review items
+were not needed by any adapter and were not changed.

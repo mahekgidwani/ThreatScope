@@ -1,6 +1,8 @@
 # Network monitoring: Zeek evaluation and decision (Phase 3, Task 5)
 
 Status: **decision recorded; nothing installed; no Docker networking changed.**
+Update (Task 6): the three approvals in section 5 were not given, so the outcome is **option 3, defer**. Phase 3 proceeded without
+network monitoring. Everything below stays valid if the approvals are given later.
 Date of evaluation: 2026-11-07. Every number below was measured on the development machine or taken from the
 cited Zeek documentation on that date.
 
