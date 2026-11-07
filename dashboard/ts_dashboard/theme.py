@@ -129,7 +129,7 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible, [tabindex]
 .ts-state-title { font-weight: 600; font-size: 14.5px; margin: 0 0 3px; }
 .ts-state-text { color: var(--ts-muted); font-size: 13.5px; margin: 0; max-width: 62ch; }
 .ts-state.error .ts-state-title { color: var(--ts-bad); }
-.ts-skeleton { background: var(--ts-panel); border: 1px solid var(--ts-border); border-radius: 10px; height: 92px;
+.ts-skeleton { background: var(--ts-panel); border: 1px solid var(--ts-border); border-radius: 10px; height: 92px; margin-bottom: 8px;
   animation: ts-pulse 1.3s ease-in-out infinite; }
 @keyframes ts-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .ts-skeleton { animation: none; } * { transition: none !important; } }

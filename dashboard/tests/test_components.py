@@ -89,3 +89,7 @@ def test_tables_with_no_rows_still_render_headers():
 def test_score_is_always_next_to_the_experimental_label_in_the_overview_notes():
     from ts_dashboard.theme import SCORE_NOTE
     assert "not a probability of compromise" in SCORE_NOTE and SCORE_NOTE.startswith("Experimental prioritisation score")
+
+
+def test_loading_skeletons_carry_no_inline_style():
+    assert "style=" not in c.kpi_skeletons() and c.kpi_skeletons(3).count("ts-skeleton") == 3

@@ -66,7 +66,7 @@ def kpi_card(label: str, value: int | str, context: str, tone: str | None = None
 
 
 def kpi_skeletons(count: int = 5) -> str:
-    return "".join('<div class="ts-skeleton" style="margin-bottom:8px"></div>' for _ in range(count))
+    return "".join('<div class="ts-skeleton"></div>' for _ in range(count))
 
 
 def panel_heading(title: str, subtitle: str = "") -> str:
