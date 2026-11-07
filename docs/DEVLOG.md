@@ -29,3 +29,25 @@ newest Alpine base layer corrupt (`exec format error`, even for a freshly pulled
 Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL major version, larger image. Docker
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
+
+### Task 3 - Configuration and logging (done)
+Files: `backend/app/config.py`, `backend/app/logging_config.py`, `backend/app/__init__.py`,
+`backend/tests/conftest.py`, `backend/tests/unit/test_config.py`, `backend/tests/unit/test_logging_config.py`,
+and `pythonpath = .` added to `backend/pytest.ini`.
+What `config.py` does: reads settings from environment variables (and the `.env` file) into one `Settings` object
+using Pydantic Settings. Names match `.env.example`. Unknown keys such as `POSTGRES_HOST_PORT` (used only by
+Docker Compose) are ignored. Rules: API key is required, at least 16 characters, no leading/trailing spaces,
+not a placeholder (`change-me`, `changeme`, `your-api-key`, anything containing `password`) and not repetitive
+(fewer than 6 different characters). Port must be 1-65535, `APP_ENV` is dev/test/prod, `LOG_LEVEL` is a real level.
+How secrets are protected: the API key, database password and optional `DATABASE_URL` are `SecretStr`, so they
+print as `**********` everywhere; error messages never contain the secret (`hide_input_in_errors`).
+Database URL: `URL.create(...)` keeps user, password, host and database as separate values, so characters like
+`@ : / ? # %` and spaces in a password are escaped correctly. `safe_database_url` shows `***` instead of the password.
+What `logging_config.py` does: one stderr handler, format `time LEVEL logger message`. You can pass known secrets;
+any appearance in a message, its arguments or a traceback is replaced by `***`. SQLAlchemy's own SQL logging is
+forced to WARNING so SQL parameters never reach the logs. Calling it twice does not duplicate lines.
+Tests: `docker compose run --rm --no-deps backend pytest -q` -> 52 passed. `conftest.py` always replaces the API key with a
+random fake one, so tests never use the real key.
+Known limit: `ValidationError.errors()` (not `str()`) still contains the raw input; the app never logs it.
+Common errors: `ValidationError ... ingest_api_key` = key missing/weak in `.env`; `ModuleNotFoundError: app` when running
+pytest outside `backend/` (run it from there or in the container).
