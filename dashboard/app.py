@@ -1,40 +1,23 @@
 """ThreatScope dashboard entry point. Run from this folder: `streamlit run app.py`.
 
-Task 1 foundation only: it proves the Streamlit -> API client -> FastAPI path by showing /health.
-The real pages (Overview, Events, ...) arrive in later tasks.
+Streamlit runs this file first on every page view; it sets up the theme and the sidebar navigation.
 """
-from datetime import datetime, timezone
-
 import streamlit as st
-from pydantic import ValidationError
 
-from ts_dashboard.api_client import ApiError, ThreatScopeApi
-from ts_dashboard.config import load_settings
+from ts_dashboard.theme import css
+from views import overview, placeholders, status
 
-st.set_page_config(page_title="ThreatScope", layout="wide")
+st.set_page_config(page_title="ThreatScope", page_icon=":material/shield:", layout="wide", initial_sidebar_state="auto")
+st.markdown(f"<style>{css()}</style>", unsafe_allow_html=True)
+st.logo("assets/logo.svg", size="large")
 
-
-@st.cache_resource
-def get_api() -> ThreatScopeApi:
-    return ThreatScopeApi(load_settings())
-
-
-st.title("ThreatScope")
-try:
-    api = get_api()
-except ValidationError:
-    st.error("Dashboard configuration is invalid. Check THREATSCOPE_API_URL and THREATSCOPE_TIMEOUT_SECONDS.")
-    st.stop()
-
-st.button("Refresh")  # any click reruns the script, which re-reads /health
-try:
-    health = api.health()
-except ApiError as error:
-    st.error(f"API unavailable: {error.user_message}")
-    st.stop()
-
-st.session_state["last_ok"] = datetime.now(timezone.utc)
-(st.success if health.status == "ready" else st.warning)(
-    f"API: {health.api.status}  |  Database: {health.database.status}"
-    + (f" ({health.database.latency_ms:.1f} ms)" if health.database.latency_ms is not None else ""))
-st.caption(f"Last successful check: {st.session_state['last_ok']:%Y-%m-%d %H:%M:%S} UTC")
+navigation = st.navigation([
+    st.Page(overview.render, title="Overview", icon=":material/dashboard:", url_path="overview", default=True),
+    st.Page(placeholders.events, title="Events", icon=":material/list_alt:", url_path="events"),
+    st.Page(placeholders.indicators, title="Indicators", icon=":material/fingerprint:", url_path="indicators"),
+    st.Page(placeholders.correlation, title="Correlation", icon=":material/hub:", url_path="correlation"),
+    st.Page(placeholders.incidents, title="Incidents", icon=":material/crisis_alert:", url_path="incidents"),
+    st.Page(placeholders.reports, title="Reports", icon=":material/summarize:", url_path="reports"),
+    st.Page(status.render, title="System status", icon=":material/monitor_heart:", url_path="status"),
+])
+navigation.run()

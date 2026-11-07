@@ -1,6 +1,6 @@
 # ThreatScope Phase 4: dashboard
 
-Streamlit dashboard that reads real data from the FastAPI backend. Task 1 (foundation) is done; pages arrive in Tasks 2-7.
+Streamlit dashboard that reads real data from the FastAPI backend. Done: Task 1 (foundation), Task 2 (shell, theme, Overview, System status).
 
 ```
 Dashboard (Streamlit, Windows host) -> ts_dashboard.api_client -> FastAPI (:8000) -> services -> PostgreSQL
@@ -63,3 +63,15 @@ docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend p
 | Fixed order: events by `occurred_at` desc, indicators by `last_seen` desc | Tasks 3, 4 | sort the fetched page in the browser | `sort` parameter |
 | No free-text search (exact-match filters only) | Task 3 | none | `q` parameter |
 | `limit` max 100 | Tasks 2, 4, 6 | page through with `offset` | none needed |
+
+## Task 2: shell, theme and Overview
+
+- Navigation: `st.navigation` with seven entries; Events, Indicators, Correlation, Incidents and Reports are placeholders until their task.
+- Look: dark navy console, one cyan accent, severity colours reserved for severity and always paired with a text label.
+  Tokens live in `ts_dashboard/theme.py` (single source for CSS and charts). System font stack (Segoe UI first): this is an Operate surface.
+- Streamlit strips inline `style` attributes from markdown HTML, so colours are CSS classes (`sev-high`, ...).
+- All event text is HTML-escaped before it reaches the page (`components.py`, tested with hostile input).
+- Overview numbers: totals, per-severity and per-source counts are exact (`total` of `limit=1` queries). The trend and recent lists use the newest 500
+  events and the page says so when that is fewer than all events. "Recurring" = sighting count above 1, among the 300 most recently seen indicators.
+- Tests: `tests/fake_backend.py` is an in-memory API with the real filter, order and paging rules; `tests/ui/` runs the real app with Streamlit AppTest and needs the host
+  packages (streamlit, plotly). The rest (101 tests) also runs on Python 3.12 in the backend image with `--ignore=tests/ui`.

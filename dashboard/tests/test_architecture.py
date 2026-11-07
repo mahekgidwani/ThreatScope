@@ -9,7 +9,7 @@ import ast
 from pathlib import Path
 
 DASHBOARD = Path(__file__).resolve().parents[1]
-SOURCES = sorted(DASHBOARD.glob("ts_dashboard/*.py")) + [DASHBOARD / "app.py"]
+SOURCES = sorted(DASHBOARD.glob("ts_dashboard/*.py")) + sorted(DASHBOARD.glob("views/*.py")) + [DASHBOARD / "app.py"]
 FORBIDDEN_IMPORTS = {"app", "integrations", "sqlalchemy", "psycopg", "psycopg2", "sqlite3", "asyncpg"}
 NETWORK_LIBRARIES = {"httpx", "requests", "urllib.request", "http.client", "socket", "aiohttp", "urllib3"}
 ONLY_THE_CLIENT_MAY_USE_THE_NETWORK = "api_client.py"
@@ -31,7 +31,10 @@ def top_level_imports(path: Path) -> set[str]:
 
 
 def test_the_sources_were_found():
-    assert {p.name for p in SOURCES} == {"__init__.py", "api_client.py", "config.py", "models.py", "redact.py", "app.py"}
+    names = {p.relative_to(DASHBOARD).as_posix() for p in SOURCES}
+    assert {"app.py", "ts_dashboard/api_client.py", "ts_dashboard/config.py", "ts_dashboard/models.py", "ts_dashboard/redact.py",
+            "ts_dashboard/overview.py", "ts_dashboard/components.py", "ts_dashboard/charts.py", "ts_dashboard/theme.py",
+            "ts_dashboard/paging.py", "views/overview.py", "views/common.py"} <= names
 
 
 def test_no_backend_or_database_imports():
@@ -51,10 +54,16 @@ def test_the_dashboard_never_handles_the_ingest_key():
         assert "x-api-key" not in code and "ingest_api_key" not in code, path.name
 
 
-def test_streamlit_is_only_used_by_the_entry_point():
+def test_streamlit_is_only_used_by_the_entry_point_and_the_views():
     for path in SOURCES:
-        if path.name != "app.py":
+        if path.name != "app.py" and path.parent.name != "views":
             assert "streamlit" not in top_level_imports(path), path.name  # keeps the logic testable without a browser
+
+
+def test_plotly_is_only_used_by_the_chart_module():
+    for path in SOURCES:
+        if path.name != "charts.py":
+            assert "plotly" not in top_level_imports(path), path.name
 
 
 def test_streamlit_is_bound_to_loopback_only():

@@ -23,3 +23,7 @@ pgdata/
 .vscode/
 .claude/
 .superpowers/
+
+# Design review screenshots (local evidence)
+.impeccable/review/
+.impeccable/mocks/

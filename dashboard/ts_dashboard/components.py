@@ -1,0 +1,159 @@
+"""HTML snippets for the dashboard. Pure string builders (no Streamlit), so they can be tested.
+
+SECURITY: event text comes from outside (log lines, file contents, domains an attacker chose). Every
+value that enters HTML goes through `html.escape` here; callers pass raw text, never HTML, except to
+`table()` cells, which must be built by the helpers below (`cell_text`, `cell_mono`, `severity_badge`...).
+"""
+from datetime import datetime, timezone
+from html import escape
+from typing import Sequence
+
+from ts_dashboard.models import Event, Health, Indicator
+from ts_dashboard.theme import INDICATOR_LABELS, SEVERITY_COLOURS, SEVERITY_LABELS, SOURCE_LABELS
+
+_ICON_INFO = ('<svg viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="1.8" stroke-linecap="round" '
+              'stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>')
+_ICON_ALERT = ('<svg viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="1.8" stroke-linecap="round" '
+               'stroke-linejoin="round"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v5M12 18h.01"/></svg>')
+
+
+def fmt_time(moment: datetime) -> str:
+    """Always UTC and always labelled, so the table, the header and the exports agree."""
+    return moment.astimezone(timezone.utc).strftime("%d %b %Y %H:%M UTC")
+
+
+def fmt_time_short(moment: datetime) -> str:
+    """For narrow tables: no year (the panel subtitle says UTC)."""
+    return moment.astimezone(timezone.utc).strftime("%d %b %H:%M")
+
+
+def short(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+# ---- header ---------------------------------------------------------------------------------
+
+def status_pill(label: str, state: str) -> str:
+    """state: 'ok', 'bad' or 'unknown'."""
+    return f'<span class="ts-pill {escape(state)}"><i></i>{escape(label)}</span>'
+
+
+def health_pills(health: Health | None) -> str:
+    """API and database state. `None` = the API could not be reached, so the database state is unknown."""
+    if health is None:
+        return status_pill("API unavailable", "bad") + status_pill("Database unknown", "unknown")
+    database_up = health.database.status == "up"
+    return (status_pill("API healthy", "ok")
+            + status_pill("Database healthy" if database_up else "Database unavailable", "ok" if database_up else "bad"))
+
+
+def page_title(title: str, description: str) -> str:
+    return f'<div class="ts-title" role="heading" aria-level="1">{escape(title)}</div><div class="ts-desc">{escape(description)}</div>'
+
+
+# ---- cards, panels, states ------------------------------------------------------------------
+
+def kpi_card(label: str, value: int | str, context: str, severity: str | None = None) -> str:
+    """`severity` colours the dot, and the figure too when the count is above zero (zero stays neutral)."""
+    sev = f" sev-{escape(severity)}" if severity else ""
+    lit = " lit" if severity and isinstance(value, int) and value > 0 else ""
+    shown = f"{value:,}" if isinstance(value, int) else escape(str(value))
+    return (f'<div class="ts-kpi"><div class="ts-kpi-label{sev}"><i></i>{escape(label)}</div>'
+            f'<div class="ts-kpi-value{sev}{lit}">{shown}</div><div class="ts-kpi-context">{escape(context)}</div></div>')
+
+
+def kpi_skeletons(count: int = 5) -> str:
+    return "".join('<div class="ts-skeleton" style="margin-bottom:8px"></div>' for _ in range(count))
+
+
+def panel_heading(title: str, subtitle: str = "") -> str:
+    return f'<div class="ts-panel-title" role="heading" aria-level="2">{escape(title)}</div><div class="ts-panel-sub">{escape(subtitle)}</div>'
+
+
+def note(text: str) -> str:
+    return f'<div class="ts-note">{escape(text)}</div>'
+
+
+def empty_state(title: str, text: str) -> str:
+    return (f'<div class="ts-state">{_ICON_INFO}<div><div class="ts-state-title">{escape(title)}</div>'
+            f'<div class="ts-state-text">{escape(text)}</div></div></div>')
+
+
+def error_state(title: str, text: str) -> str:
+    return (f'<div class="ts-state error" role="alert">{_ICON_ALERT}<div><div class="ts-state-title">{escape(title)}</div>'
+            f'<div class="ts-state-text">{escape(text)}</div></div></div>')
+
+
+# ---- table cells and table ------------------------------------------------------------------
+
+def severity_badge(severity: str) -> str:
+    known = severity if severity in SEVERITY_COLOURS else "info"
+    return f'<span class="ts-badge sev-{known}">{escape(SEVERITY_LABELS.get(severity, severity))}</span>'
+
+
+def cell_text(text: str, limit: int = 0) -> str:
+    return escape(short(text, limit) if limit else text)
+
+
+def cell_mono(text: str, limit: int = 0) -> str:
+    return f'<span class="ts-mono">{escape(short(text, limit) if limit else text)}</span>'
+
+
+def cell_muted(text: str) -> str:
+    return f'<span class="ts-muted">{escape(text)}</span>'
+
+
+def cell_nowrap(text: str) -> str:
+    return f'<span class="ts-nowrap">{escape(text)}</span>'
+
+
+def table(headers: Sequence[tuple[str, bool]], rows: Sequence[Sequence[str]]) -> str:
+    """`headers`: (title, right_aligned). `rows`: lists of cell HTML built by the helpers above."""
+    head = "".join(f'<th class="{"num" if right else ""}">{escape(title)}</th>' for title, right in headers)
+    body = "".join(
+        "<tr>" + "".join(f'<td class="{"num" if headers[i][1] else ""}">{cell}</td>' for i, cell in enumerate(row)) + "</tr>"
+        for row in rows)
+    return f'<div class="ts-table-wrap"><table class="ts-table"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
+
+
+# ---- domain-specific rows -------------------------------------------------------------------
+
+def primary_indicator(event: Event) -> tuple[str, str]:
+    """(kind label, value) of the most telling indicator on an event, or ('', '')."""
+    for kind, value in (("IP", event.source_ip), ("Domain", event.domain), ("URL", event.url), ("SHA-256", event.file_hash)):
+        if value:
+            return kind, value
+    return "", ""
+
+
+def events_table(events: Sequence[Event]) -> str:
+    rows = []
+    for e in events:
+        kind, value = primary_indicator(e)
+        rows.append([
+            f'<span class="ts-nowrap ts-muted">{escape(fmt_time(e.occurred_at))}</span>',
+            severity_badge(e.severity),
+            f"<strong>{e.risk_score}</strong>",
+            cell_text(SOURCE_LABELS.get(e.source, e.source)),
+            cell_mono(e.event_type),
+            cell_mono(value, 34) if value else cell_muted("none"),
+            cell_text(e.description, 90),
+        ])
+    return table([("Occurred", False), ("Severity", False), ("Risk", True), ("Source", False), ("Type", False),
+                  ("Indicator", False), ("Description", False)], rows)
+
+
+def indicators_table(indicators: Sequence[Indicator]) -> str:
+    rows = [[cell_nowrap(INDICATOR_LABELS.get(i.type, i.type)), cell_mono(i.value, 40), f"<strong>{i.sighting_count}</strong>",
+             f'<span class="ts-nowrap ts-muted">{escape(fmt_time_short(i.last_seen))}</span>'] for i in indicators]
+    return table([("Type", False), ("Value", False), ("Seen", True), ("Last seen (UTC)", False)], rows)
+
+
+def high_risk_table(events: Sequence[Event]) -> str:
+    rows = []
+    for e in events:
+        kind, value = primary_indicator(e)
+        rows.append([f'<span class="ts-nowrap ts-muted">{escape(fmt_time_short(e.occurred_at))}</span>', severity_badge(e.severity),
+                     f"<strong>{e.risk_score}</strong>", cell_mono(e.event_type), cell_mono(value, 28) if value else cell_muted("none")])
+    return table([("Occurred (UTC)", False), ("Severity", False), ("Risk", True), ("Type", False), ("Indicator", False)], rows)
+
