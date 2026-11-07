@@ -30,6 +30,28 @@ Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL majo
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
 
+### Task 5 - Pydantic schemas: the API contract (done)
+Files: `backend/app/schemas/{common,event,indicator,incident,health}.py`, tests `tests/unit/test_event_schema.py`
+and `tests/unit/test_output_schemas.py`.
+What it is: Pydantic classes that describe exactly what a client may send (`EventIn`) and what the API returns
+(`EventOut`, `IndicatorOut`, `IncidentOut`, `Page`, `HealthOut`, `ErrorResponse`). FastAPI uses them to validate input
+automatically and to build the `/docs` page.
+Why strict: bad data is cheapest to stop at the door. `EventIn` rejects unknown fields and the server-owned ones
+(`id`, `received_at`, `risk_score`, `risk_factors`), so a client cannot fake a risk score.
+Normalisation (the same thing always has one spelling): times become UTC and must carry a timezone (naive times and
+Unix numbers, even as text, are refused); IPs use the canonical form (`2001:0DB8:0:0:0:0:0:1` -> `2001:db8::1`);
+domains become lower-case punycode without a trailing dot (`Bücher.Example.` -> `xn--bcher-kva.example`; a Cyrillic
+look-alike `аpple.com` becomes a visibly different `xn--` name); hashes become lower-case; URLs must be ASCII,
+http/https/ftp, have a host, no spaces or control characters, at most 1024 characters.
+Metadata: plain JSON only (no NaN, no custom objects), at most `MAX_METADATA_BYTES` counted in bytes, and at most 10
+levels deep (see Rulings in the ledger: a 5,000-level-deep object was small enough to pass the size check but could
+break serialising the event back out).
+`EventOut` reads the database model directly (`from_attributes`) and exposes `event_metadata` under its API name
+`metadata`. `normalise_domain` is public so the list endpoint's `domain` filter uses the same rules as ingestion.
+Tests: 101 schema tests. Command: `docker compose run --rm --no-deps backend pytest -q tests/unit`.
+Known limits: URLs are stored exactly as sent (scheme/host are not lower-cased); domains must be valid hostnames, so
+names starting with an underscore (e.g. `_dmarc.example.com`) are rejected.
+
 ### Task 4 - Database layer and the five tables (done)
 Files: `backend/app/enums.py`, `app/db.py`, `app/models/{types,event,indicator,incident,__init__}.py`;
 tests: `tests/db/test_constraints.py`, `tests/db/test_db_layer.py`, `tests/unit/test_db_guard.py`;
