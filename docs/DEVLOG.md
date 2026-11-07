@@ -30,6 +30,21 @@ Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL majo
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
 
+### Task 9 - Health endpoint (done)
+Files: `backend/app/api/health.py` (registered in `main.py`), tests `tests/api/test_health.py`.
+`GET /health` returns `{"status": "ready" | "not_ready", "api": {"status": "up"}, "database": {"status": "up" | "down", "latency_ms": ...}}`.
+The API and the database are reported separately: if the code runs at all the API is up; the database is checked with
+`SELECT 1` (2-second connect timeout). Both up = HTTP 200 `ready`; database unreachable = HTTP 503 `not_ready` with
+`database.status = "down"` and `latency_ms = null`. The body never contains driver names, host names, user names,
+passwords or error text - the reason goes to the log (error type only). It needs no API key and is sent with
+`Cache-Control: no-store` so a proxy never serves a stale answer. Why it matters: Docker, load balancers and the dashboard use
+this to know when the system is really usable.
+Tests: 18 (9 cases on SQLite and on PostgreSQL), including a database that refuses connections (port 1) to prove the 503
+path, a check that the response and the log contain no credentials, and a speed check (< 5 s). Mutation check: forcing
+"ready" made the 503 test fail. Full suite 575 passed.
+Command: `docker compose run --rm backend pytest -q tests/api/test_health.py`.
+Manual check against the running stack (stop and start `db`) is done in Task 10.
+
 ### Task 8 - REST API, API-key auth and uniform errors (done)
 Files: `backend/app/main.py` (app factory), `app/api/{deps,events,indicators,incidents}.py`, `app/errors.py` (now also maps
 errors to responses), tests `tests/api/{test_events_api,test_read_api,test_startup}.py`, `client` fixture in `tests/conftest.py`.

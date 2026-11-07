@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from app import db as db_module
-from app.api import events, incidents, indicators
+from app.api import events, health, incidents, indicators
 from app.config import get_settings
 from app.errors import register_handlers
 from app.logging_config import configure_logging
@@ -48,6 +48,7 @@ def create_app(run_startup: bool = True) -> FastAPI:
             access_log.info("%s %s %s %.1fms", request.method, request.url.path, status,
                             (time.perf_counter() - started) * 1000)
 
+    application.include_router(health.router)
     application.include_router(events.router)
     application.include_router(indicators.router)
     application.include_router(incidents.router)
