@@ -19,10 +19,15 @@ os.environ.setdefault("POSTGRES_PASSWORD", "test-password-fake")
 os.environ.setdefault("POSTGRES_DB", "test_db")
 
 import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+import app.db  # noqa: E402
 from app.config import get_settings  # noqa: E402
+from app.main import create_app  # noqa: E402
 from tests.db_support import build_postgres_engine, build_sqlite_engine, reset_schema  # noqa: E402
+
+AUTH = {"X-API-Key": TEST_API_KEY}
 
 
 @pytest.fixture(scope="session")
@@ -56,3 +61,16 @@ def engine(request):
 def session(engine):
     with Session(engine) as db_session:
         yield db_session
+
+
+@pytest.fixture
+def client(engine, monkeypatch):
+    """HTTP client for the real application, wired to the test engine.
+
+    The real `get_db` dependency is used (not an override): only the engine behind it is swapped.
+    Unhandled server errors become 500 responses instead of raising into the test.
+    """
+    monkeypatch.setattr(app.db, "get_engine", lambda: engine)
+    application = create_app(run_startup=False)
+    with TestClient(application, raise_server_exceptions=False) as test_client:
+        yield test_client

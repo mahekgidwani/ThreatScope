@@ -99,6 +99,13 @@ def test_invalid_ip_rejected(value):
     rejected(source_ip=value)
 
 
+@pytest.mark.parametrize("field", ["source_ip", "destination_ip"])
+def test_ip_error_message_does_not_echo_the_input(field):
+    with pytest.raises(ValidationError) as exc:
+        make(**{field: "999.1.1.1-SECRETTOKEN"})
+    assert "SECRETTOKEN" not in exc.value.errors()[0]["msg"]
+
+
 # ---- domains -------------------------------------------------------------------
 
 def test_unicode_domain_becomes_punycode_lowercase_without_trailing_dot():

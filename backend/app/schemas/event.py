@@ -139,7 +139,12 @@ class EventIn(BaseModel):
     @field_validator("source_ip", "destination_ip")
     @classmethod
     def _canonical_ip(cls, value: str | None) -> str | None:
-        return None if value is None else str(ipaddress.ip_address(value))
+        if value is None:
+            return None
+        try:
+            return str(ipaddress.ip_address(value))
+        except ValueError:  # Python's own message repeats the input, so replace it
+            raise ValueError("not a valid IPv4 or IPv6 address") from None
 
     @field_validator("domain")
     @classmethod

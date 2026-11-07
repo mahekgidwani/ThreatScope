@@ -30,6 +30,25 @@ Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL majo
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
 `alpine:latest` images were removed and `alpine`-based images should be re-checked if they are needed later.
 
+### Task 8 - REST API, API-key auth and uniform errors (done)
+Files: `backend/app/main.py` (app factory), `app/api/{deps,events,indicators,incidents}.py`, `app/errors.py` (now also maps
+errors to responses), tests `tests/api/{test_events_api,test_read_api,test_startup}.py`, `client` fixture in `tests/conftest.py`.
+Endpoints: `POST /api/v1/events` (needs header `X-API-Key`), `GET /api/v1/events` (filters, paging), `GET /api/v1/events/{id}`,
+`GET /api/v1/indicators`, `GET /api/v1/incidents`; interactive docs at `/docs`. Routers contain no queries: they parse input,
+call a service, and shape the response.
+Security: the key comes from `INGEST_API_KEY`, is compared with `hmac.compare_digest`, and is never logged or returned. Reads
+are open on purpose for the local MVP (ports are published on 127.0.0.1 only). The request log line is
+`METHOD /path STATUS duration` - no query string, headers or body. At startup the app loads the settings (a missing, weak or
+placeholder key stops it), turns on secret-redacting logging and creates missing tables.
+Errors: every error has the shape `{"error": {"code", "message", "details"}}`: 401 unauthorized, 404 not_found (also unknown
+routes), 405, 409 duplicate_event (with the existing id), 422 validation_error / invalid_filter, 503 database_error (database
+unreachable), 500 internal_error. Responses never contain SQL, stack traces, credentials or the submitted value; those go to the
+log. Validation details are only `{loc, type, msg}`.
+Found while testing: Python's own "invalid IP" message repeated the input, so the schema now raises its own message.
+Tests: 3 new test files and 171 new test cases (suite went 386 -> 557; every API test runs on SQLite and on PostgreSQL). Mutation checks: disabling auth + echoing
+input made 12 tests fail; skipping startup work made 5 fail. Command: `docker compose run --rm backend pytest -q`.
+Known: test output shows one warning from FastAPI's test client about httpx (tooling, not our code).
+
 ### Task 7 - Services: create, get and list events (done)
 Files: `backend/app/errors.py`, `app/services/{event_service,indicator_service,incident_service,paging}.py`; tests
 `tests/unit/test_errors.py`, `tests/db/test_event_service.py`, `tests/db/test_concurrency_pg.py`; one line added to
