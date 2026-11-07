@@ -64,7 +64,7 @@ def test_summary_cards_list_and_detail(monkeypatch):
     page = text(at)
     for expected in ("Open", "Investigating", "Closed", "All incidents", "3 match", "Incident 1", "Incident 2", "Create an incident"):
         assert expected in page, expected
-    assert page.count('<div class="ts-kpi-value">') == 4
+    assert page.count('<div class="ts-kpi-value') == 4
     at.selectbox(key="ic_pick").select(2).run()
     page = text(at)
     assert not at.exception and "Incident #2" in page and "Events in this incident" in page and "not a probability of compromise" in page

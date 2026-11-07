@@ -4,10 +4,12 @@ Unified cyber threat detection and monitoring platform (college project). It col
 domain-squatting detection, a web honeypot, file analysis and network monitoring into **one PostgreSQL database**
 behind a **FastAPI** backend.
 
-**Status: Phase 3 (integrations) complete for three of four sources.** The API stores, scores and serves events, and
+**Status: Phase 4 (dashboard) implemented on top of Phase 3 (integrations, three of four sources).** The API stores, scores and serves events, and
 adapters now collect them from **file analysis, domain look-alike detection (openSquat-derived) and a ModSecurity web
-honeypot log**. Network monitoring was evaluated (Zeek) and deferred. Correlation, incidents and the dashboard arrive in
-Phase 4. See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+honeypot log**. Network monitoring was evaluated (Zeek) and deferred. See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
+**Phase 4 adds a browser dashboard** (Streamlit, `dashboard/`): overview, event explorer, indicators, correlation, incident
+management and reports, read through the API. See [docs/DASHBOARD.md](docs/DASHBOARD.md).
 
 > The project folder is spelled `ThreaScope` (`F:\ThreaScope`); the product name is ThreatScope. Nothing is renamed.
 
@@ -170,3 +172,13 @@ third_party/NOTICE.md   attribution
 ## Licence
 
 GNU General Public License v3.0 (see `LICENSE`). Third-party notices: `third_party/NOTICE.md`.
+
+## Dashboard
+
+```powershell
+Set-Location F:\ThreaScope\dashboard
+pip install -r requirements.txt   # once, on the host
+streamlit run app.py              # http://127.0.0.1:8501 (the API must be running: docker compose up -d)
+```
+
+Set `INGEST_API_KEY` (the same value as the API's) to allow creating and editing incidents; without it the dashboard is read-only.

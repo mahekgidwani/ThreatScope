@@ -1,73 +1,96 @@
 # ThreatScope Phase 4: dashboard
 
-Streamlit dashboard that reads real data from the FastAPI backend. Done: Task 1 (foundation), Task 2 (shell, theme, Overview, System status), Task 3 (Events Explorer), Task 4 (Indicators and Correlation), Task 5 (Incident Management), Task 6 (Reports and exports).
+A browser dashboard for ThreatScope: overview, event investigation, indicators, correlation, incident management and reports, all read from the
+real FastAPI backend (never from PostgreSQL directly, never from hardcoded data).
 
 ```
-Dashboard (Streamlit, Windows host) -> ts_dashboard.api_client -> FastAPI (:8000) -> services -> PostgreSQL
+Dashboard (Streamlit, Windows host, 127.0.0.1:8501) -> ts_dashboard.api_client -> FastAPI (127.0.0.1:8000) -> services -> PostgreSQL
 ```
+
+## Run it
+
+```powershell
+Set-Location F:\ThreaScope
+docker compose up -d                       # PostgreSQL + API (already running if you did Phase 2/3)
+pip install -r dashboard\requirements.txt  # once: streamlit, plotly, httpx, pydantic (host Python)
+Set-Location dashboard
+streamlit run app.py                       # http://127.0.0.1:8501  (open the root URL, not /events)
+```
+
+Optional configuration (environment or `.env`, same names the adapters use): `THREATSCOPE_API_URL` (default `http://127.0.0.1:8000`),
+`THREATSCOPE_TIMEOUT_SECONDS` (default 10), and `INGEST_API_KEY` (turns on incident editing; without it the dashboard is read-only).
+
+## Tests
+
+| Command | What it runs |
+|---|---|
+| `cd dashboard; python -m pytest -q` | all mocked tests on the host (fake API, Streamlit AppTest) |
+| `docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend pytest -q --ignore=tests/ui` | the Streamlit-free tests on Python 3.12 in the existing backend image |
+| `cd dashboard; python -m pytest -q -m live` | **integration**: dashboard code against the real running API and PostgreSQL (read-only; fails, never skips, if the backend is down) |
+| `docker compose run --rm backend pytest -q` | Phase 2, Phase 3 and the new incident API tests, SQLite and PostgreSQL |
 
 ## Layout
 
 ```
 dashboard/
-  app.py                 entry point (Task 1: shows /health only)
-  .streamlit/config.toml bound to 127.0.0.1:8501, no telemetry, dark base theme
-  requirements*.txt      streamlit, httpx, pydantic, pydantic-settings (+ pytest for dev)
-  ts_dashboard/
-    config.py            THREATSCOPE_API_URL, THREATSCOPE_TIMEOUT_SECONDS (no key)
-    api_client.py        read-only client + ApiError family with user_message
-    models.py            validated copies of the API's JSON (no backend imports)
-    redact.py            hides secrets in metadata before display/export
-  tests/                 65 tests, no browser, no database, mocked HTTP
+  app.py                     theme, sidebar navigation (st.navigation)
+  views/                     one module per page (+ common.py: client, header); the only code that imports Streamlit
+  ts_dashboard/              logic with no Streamlit import, so it is testable and reusable
+    config.py  api_client.py  models.py  redact.py        settings, the one HTTP client, validated API shapes, secret hiding
+    overview.py events.py indicators.py correlation.py incidents.py reports.py paging.py    data side of each page
+    components.py theme.py charts.py                      escaped HTML parts, design tokens + CSS, Plotly figures
+  tests/ (mocked)  tests/ui/ (AppTest)  tests/live/ (real stack)  tests/fake_backend.py (in-memory API with the real rules)
+  .streamlit/config.toml     127.0.0.1 only, no telemetry, dark base theme
 ```
 
-## Run
+## Rules (each one is enforced by a test)
 
-```powershell
-Set-Location F:\ThreaScope\dashboard
-streamlit run app.py            # http://127.0.0.1:8501 ; the backend must be up: docker compose up -d
-```
+1. HTTP only. The dashboard imports no backend code, no SQLAlchemy, no database driver; only `api_client.py` touches the network; Plotly only in `charts.py`.
+2. **The API key is optional and used only for incident writes.** Every read is an open `GET`. Creating and editing incidents needs `X-API-Key`, so the dashboard reads
+   `INGEST_API_KEY` if present. It is a `SecretStr`, sent only as that header by two client methods, scrubbed from error text, and never rendered or logged.
+3. No cache: a page shows what was just read from the API; when the API fails it shows the error, never old data as live.
+4. All event text is HTML-escaped before display; metadata, URLs and CSV cells have secrets hidden; CSV cells cannot run as spreadsheet formulas.
+5. Risk scores are shown as computed by the backend with "Experimental prioritisation score - not a probability of compromise." No scoring logic exists in the dashboard.
+6. Streamlit is bound to `127.0.0.1`; nothing is exposed publicly.
 
-Tests run in the existing backend image (Python 3.12, no new image or install):
+## Pages
 
-```powershell
-Set-Location F:\ThreaScope
-docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend pytest -q -p no:cacheprovider
-```
-
-## Rules
-
-1. HTTP only. The dashboard imports no backend code, no SQLAlchemy, no database driver (`tests/test_architecture.py`).
-2. **The API key is optional, and used only for incident writes.** Every read is an open `GET`. Creating and editing incidents needs `X-API-Key`,
-   so the dashboard reads `INGEST_API_KEY` (same `.env` as the API) if present; without it the dashboard is read-only and says so. The key is a
-   `SecretStr`, sent only as that header by two client methods, scrubbed from error text, and never rendered (tests enforce each point).
-3. No caching in the client: what a page shows was just read from the API. When the API fails the page shows the error, not old data.
-4. Risk scores are shown as the backend computed them, labelled "Experimental prioritisation score - not a probability of compromise."
+| Page | Shows |
+|---|---|
+| Overview | 5 KPI cards, events over time / by severity / by source, recent events, top recurring indicators, recent high-risk activity |
+| Events | search (ID, IP, domain), filters, both sort orders, paging, event detail with risk factors, redacted metadata, related events |
+| Indicators | filter and sort indicators, related events, "an indicator is not a verdict" |
+| Correlation | indicators shared by 2+ events, cross-source tag, relationship graph, event IDs |
+| Incidents | status cards, list, detail, status / title / notes, add or remove events, create from a shared indicator or event IDs |
+| Reports | scoped summary, high-risk events, recurring indicators, CSV export, Markdown reports |
+| System status | API and database health |
 
 ## Endpoints used
 
-| Endpoint | Parameters |
-|---|---|
-| `GET /health` | 200 ready, 503 database down (both have a body) |
-| `GET /api/v1/events` | `source`, `event_type`, `severity`, `source_ip`, `domain`, `start_time`, `end_time`, `limit` (1-100), `offset` |
-| `GET /api/v1/events/{id}` | UUID |
-| `GET /api/v1/indicators` | `type`, `value`, `limit`, `offset` |
-| `GET /api/v1/incidents` | `status`, `limit`, `offset` |
+| Endpoint | Auth | Parameters |
+|---|---|---|
+| `GET /health` | no | 200 ready, 503 database down (both have a body) |
+| `GET /api/v1/events` | no | `source`, `event_type`, `severity`, `source_ip`, `domain`, `start_time`, `end_time`, `limit` (1-100), `offset` |
+| `GET /api/v1/events/{id}` | no | UUID |
+| `GET /api/v1/indicators` | no | `type`, `value`, `limit`, `offset` |
+| `GET /api/v1/incidents`, `GET /api/v1/incidents/{id}` | no | `status`, `limit`, `offset` / the incident with its events |
+| `POST /api/v1/incidents`, `PATCH /api/v1/incidents/{id}` | key | added in Phase 4 Task 5 (backend extension, below) |
 
-## API gaps found (nothing changed yet; each is raised again before the task that needs it)
+## Known limits and gaps
 
-| Gap | Affects | Workaround now | Smallest fix if needed |
-|---|---|---|---|
-| ~~No incident detail, link to events, create, status change or notes~~ | Task 5 | **Closed in Task 5** (see below) | |
-| Events cannot be filtered by `url`, `file_hash` or indicator id (only `source_ip`, `domain`) | Tasks 4, 6 | each event embeds its indicators, so match client-side over fetched pages | an `indicator_id` filter on `GET /events` |
-| No totals endpoint | Tasks 2, 6 | `total` of a page with `limit=1` is an exact filtered count; trends use one count per time window | `GET /stats` |
-| Fixed order: events by `occurred_at` desc, indicators by `last_seen` desc | Tasks 3, 4 | sort the fetched page in the browser | `sort` parameter |
-| No free-text search (exact-match filters only) | Task 3 | none | `q` parameter |
-| `limit` max 100 | Tasks 2, 4, 6 | page through with `offset` | none needed |
+| Limit | What the dashboard does | Smallest fix if it matters |
+|---|---|---|
+| Events cannot be filtered by `url`, `file_hash` or indicator id | groups the newest 1,000 events (each embeds its indicators); every page says "searched the newest N of M" | an `indicator_id` filter on `GET /events` |
+| No totals endpoint | `total` of a `limit=1` query is an exact filtered count; trends are bucketed from the newest 500 events | `GET /stats` |
+| The API only sorts newest first | "oldest first" is computed exactly from `total` and `offset`; other sorts cover the fetched set and say so | a `sort` parameter |
+| No free-text search | exact event ID, source IP or domain only | a `q` parameter |
+| Incident notes are the single `summary` field | edited as "Investigation notes"; no history | a notes table |
+| Network monitoring is deferred (Phase 3 decision) | the Network source shows 0 | out of scope |
+| `limit` is capped at 100 | pages through with `offset` | none needed |
 
 ## Task 2: shell, theme and Overview
 
-- Navigation: `st.navigation` with seven entries; Events, Indicators, Correlation, Incidents and Reports are placeholders until their task.
+- Navigation: `st.navigation` with seven entries (Overview, Events, Indicators, Correlation, Incidents, Reports, System status).
 - Look: dark navy console, one cyan accent, severity colours reserved for severity and always paired with a text label.
   Tokens live in `ts_dashboard/theme.py` (single source for CSS and charts). System font stack (Source Sans Pro, bundled with Streamlit, so every machine and the data grid draw the same face).
 - Streamlit strips inline `style` attributes from markdown HTML, so colours are CSS classes (`sev-high`, ...).
@@ -75,7 +98,7 @@ docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend p
 - Overview numbers: totals, per-severity and per-source counts are exact (`total` of `limit=1` queries). The trend and recent lists use the newest 500
   events and the page says so when that is fewer than all events. "Recurring" = sighting count above 1, among the 300 most recently seen indicators.
 - Tests: `tests/fake_backend.py` is an in-memory API with the real filter, order and paging rules; `tests/ui/` runs the real app with Streamlit AppTest and needs the host
-  packages (streamlit, plotly). The rest (101 tests) also runs on Python 3.12 in the backend image with `--ignore=tests/ui`.
+  packages (streamlit, plotly). The rest also runs on Python 3.12 in the backend image with `--ignore=tests/ui`.
 
 ## Task 3: Events Explorer
 

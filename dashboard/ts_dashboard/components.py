@@ -11,6 +11,7 @@ from typing import Sequence
 from ts_dashboard.models import Event, Health, Incident, Indicator
 from ts_dashboard.theme import INDICATOR_LABELS, SEVERITY_COLOURS, SEVERITY_LABELS, SOURCE_LABELS
 
+_STATUS_LABELS = {"open": "Open", "investigating": "Investigating", "closed": "Closed"}
 _ICON_INFO = ('<svg viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="1.8" stroke-linecap="round" '
               'stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>')
 _ICON_ALERT = ('<svg viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="1.8" stroke-linecap="round" '
@@ -53,13 +54,15 @@ def page_title(title: str, description: str) -> str:
 
 # ---- cards, panels, states ------------------------------------------------------------------
 
-def kpi_card(label: str, value: int | str, context: str, severity: str | None = None) -> str:
-    """`severity` colours the dot, and the figure too when the count is above zero (zero stays neutral)."""
-    sev = f" sev-{escape(severity)}" if severity else ""
-    lit = " lit" if severity and isinstance(value, int) and value > 0 else ""
+def kpi_card(label: str, value: int | str, context: str, tone: str | None = None) -> str:
+    """`tone` is a severity or an incident status. It colours the dot; a severity also colours the figure when the count is above zero
+    (zero stays neutral so colour means something when it appears)."""
+    is_severity = tone in SEVERITY_COLOURS
+    cls = f" sev-{tone}" if is_severity else (f" st-{tone}" if tone in _STATUS_LABELS else "")
+    lit = " lit" if is_severity and isinstance(value, int) and value > 0 else ""
     shown = f"{value:,}" if isinstance(value, int) else escape(str(value))
-    return (f'<div class="ts-kpi"><div class="ts-kpi-label{sev}"><i></i>{escape(label)}</div>'
-            f'<div class="ts-kpi-value{sev}{lit}">{shown}</div><div class="ts-kpi-context">{escape(context)}</div></div>')
+    return (f'<div class="ts-kpi"><div class="ts-kpi-label{cls}"><i></i>{escape(label)}</div>'
+            f'<div class="ts-kpi-value{cls}{lit}">{shown}</div><div class="ts-kpi-context">{escape(context)}</div></div>')
 
 
 def kpi_skeletons(count: int = 5) -> str:
@@ -109,7 +112,7 @@ def cell_nowrap(text: str) -> str:
 
 def table(headers: Sequence[tuple[str, bool]], rows: Sequence[Sequence[str]]) -> str:
     """`headers`: (title, right_aligned). `rows`: lists of cell HTML built by the helpers above."""
-    head = "".join(f'<th class="{"num" if right else ""}">{escape(title)}</th>' for title, right in headers)
+    head = "".join(f'<th scope="col" class="{"num" if right else ""}">{escape(title)}</th>' for title, right in headers)
     body = "".join(
         "<tr>" + "".join(f'<td class="{"num" if headers[i][1] else ""}">{cell}</td>' for i, cell in enumerate(row)) + "</tr>"
         for row in rows)
@@ -146,7 +149,7 @@ def events_table(events: Sequence[Event], with_id: bool = False) -> str:
 def indicators_table(indicators: Sequence[Indicator]) -> str:
     rows = [[cell_nowrap(INDICATOR_LABELS.get(i.type, i.type)), cell_mono(i.value, 40), f"<strong>{i.sighting_count}</strong>",
              f'<span class="ts-nowrap ts-muted">{escape(fmt_time_short(i.last_seen))}</span>'] for i in indicators]
-    return table([("Type", False), ("Value", False), ("Seen", True), ("Last seen (UTC)", False)], rows)
+    return table([("Type", False), ("Value", False), ("Seen", True), ("Last recorded (UTC)", False)], rows)
 
 
 def high_risk_table(events: Sequence[Event]) -> str:
@@ -203,7 +206,7 @@ def indicators_full_table(indicators: Sequence[Indicator]) -> str:
     rows = [[cell_nowrap(INDICATOR_LABELS.get(i.type, i.type)), cell_mono(i.value, 60), f"<strong>{i.sighting_count}</strong>",
              f'<span class="ts-nowrap ts-muted">{escape(fmt_time(i.first_seen))}</span>',
              f'<span class="ts-nowrap ts-muted">{escape(fmt_time(i.last_seen))}</span>'] for i in indicators]
-    return table([("Type", False), ("Value", False), ("Sightings", True), ("First seen", False), ("Last seen", False)], rows)
+    return table([("Type", False), ("Value", False), ("Sightings", True), ("First recorded", False), ("Last recorded", False)], rows)
 
 
 def indicator_detail(indicator: Indicator) -> str:
@@ -211,8 +214,8 @@ def indicator_detail(indicator: Indicator) -> str:
         ("Type", cell_text(INDICATOR_LABELS.get(indicator.type, indicator.type))),
         ("Value", cell_mono(indicator.value)),
         ("Sightings", f"<strong>{indicator.sighting_count}</strong> <span class=\"ts-muted\">(events that mentioned it, counted by the backend)</span>"),
-        ("First seen", cell_text(fmt_time(indicator.first_seen))),
-        ("Last seen", cell_text(fmt_time(indicator.last_seen))),
+        ("First recorded", cell_text(fmt_time(indicator.first_seen))),
+        ("Last recorded", cell_text(fmt_time(indicator.last_seen))),
     ])
 
 
@@ -235,7 +238,6 @@ def clusters_table(clusters: Sequence) -> str:
 
 # ---- incidents ------------------------------------------------------------------------------
 
-_STATUS_LABELS = {"open": "Open", "investigating": "Investigating", "closed": "Closed"}
 
 
 def status_badge(status: str) -> str:
@@ -253,8 +255,6 @@ def incidents_table(incidents: Sequence[Incident]) -> str:
 
 def incident_detail(incident: Incident) -> str:
     return definition_list([
-        ("Incident", f"<strong>#{incident.id}</strong>"),
-        ("Title", cell_text(incident.title)),
         ("Status", status_badge(incident.status)),
         ("Severity", severity_badge(incident.severity) + ' <span class="ts-muted">highest of its events</span>'),
         ("Risk score", f'<strong>{incident.risk_score}</strong> <span class="ts-muted">/ 100, highest of its events</span>'),

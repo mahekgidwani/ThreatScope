@@ -74,18 +74,18 @@ def graph_figure(graph: Graph) -> go.Figure:
                                hoverinfo="skip", showlegend=False))
     indicators = [n for n in graph.nodes if n.kind == "indicator"]
     fig.add_scatter(x=[n.x for n in indicators], y=[n.y for n in indicators], mode="markers+text", name="Shared indicator",
-                    text=[n.label for n in indicators], textposition="middle left", textfont=dict(color=COLORS["text"], size=12),
+                    text=[n.label for n in indicators], textposition="middle left", textfont=dict(color=COLORS["text"], size=13),
                     marker=dict(symbol="diamond", size=15, color=COLORS["accent"]), hovertext=[n.hover for n in indicators],
                     hovertemplate="%{hovertext}<extra></extra>")
     for severity in SEVERITIES[::-1]:
         group = [n for n in graph.nodes if n.kind == "event" and n.severity == severity]
         if group:
             fig.add_scatter(x=[n.x for n in group], y=[n.y for n in group], mode="markers+text", name=f"Event · {SEVERITY_LABELS[severity]}",
-                            text=[n.label for n in group], textposition="middle right", textfont=dict(color=COLORS["muted"], size=11),
+                            text=[n.label for n in group], textposition="middle right", textfont=dict(color=COLORS["text"], size=13),
                             marker=dict(symbol="circle", size=13, color=SEVERITY_COLOURS[severity]),
                             hovertext=[n.hover for n in group], hovertemplate="%{hovertext}<extra></extra>")
     rows = max(sum(1 for n in graph.nodes if n.kind == "indicator"), sum(1 for n in graph.nodes if n.kind == "event"))
-    fig.update_xaxes(visible=False, range=[-1.05, 1.45])
+    fig.update_xaxes(visible=False, range=[-1.25, 1.5])
     fig.update_yaxes(visible=False, range=[-0.08, 1.08])
     fig.update_layout(legend=dict(orientation="h", y=-0.02, yanchor="top", x=0, font=dict(size=12)))
     return _base(fig, height=max(300, 36 * rows + 90))

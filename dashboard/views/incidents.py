@@ -54,13 +54,13 @@ def _detail(api: ThreatScopeApi, incident_id: int) -> None:
             return
         st.markdown(components.panel_heading(f"Incident #{incident.id}", "Read from the API just now. " + SCORE_NOTE), unsafe_allow_html=True)
         st.markdown(components.incident_detail(incident), unsafe_allow_html=True)
+        _editor(api, incident)
         st.write("")
         st.markdown(components.panel_heading("Events in this incident", f"{incident.event_count} grouped, newest first by occurrence time (UTC)"),
                     unsafe_allow_html=True)
         st.markdown(components.events_table(incident.events, with_id=True), unsafe_allow_html=True)
         st.caption("Event IDs (copy to search on the Events page)")
         st.code("\n".join(str(e.id) for e in incident.events), language=None)
-        _editor(api, incident)
 
 
 def _editor(api: ThreatScopeApi, incident) -> None:
@@ -168,9 +168,9 @@ def render() -> None:
         _error("Incidents are unavailable", error)
         return
 
-    cards = [components.kpi_card("Open", counts["open"], "waiting to be looked at"),
-             components.kpi_card("Investigating", counts["investigating"], "being worked on"),
-             components.kpi_card("Closed", counts["closed"], "finished"),
+    cards = [components.kpi_card("Open", counts["open"], "waiting to be looked at", "open"),
+             components.kpi_card("Investigating", counts["investigating"], "being worked on", "investigating"),
+             components.kpi_card("Closed", counts["closed"], "finished", "closed"),
              components.kpi_card("All incidents", counts["all"], "stored in total")]
     for column, card in zip(st.columns(4), cards):
         column.markdown(card, unsafe_allow_html=True)

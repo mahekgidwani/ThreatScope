@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T00:00:00Z",
+  "title": "Design System: ThreatScope Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "night-ground": { "role": "neutral", "displayName": "Night Ground", "canonical": "#0B1220", "tonalRamp": ["#05080F", "#080D17", "#0B1220", "#111A2B", "#16223A", "#1E2B44", "#2B3A58", "#3E4F72"] },
+      "panel": { "role": "neutral", "displayName": "Panel", "canonical": "#111A2B", "tonalRamp": ["#05080F", "#0B1220", "#111A2B", "#16223A", "#1E2B44", "#2B3A58", "#64748B", "#9AA9C0"] },
+      "text": { "role": "neutral", "displayName": "Text", "canonical": "#E6EDF7", "tonalRamp": ["#64748B", "#7C8BA3", "#9AA9C0", "#B3C0D3", "#C9D3E2", "#E6EDF7", "#F0F4FA", "#F8FAFD"] },
+      "cyan-accent": { "role": "primary", "displayName": "Signal Cyan", "canonical": "#22D3EE", "tonalRamp": ["#0A3641", "#0F5565", "#1F7A90", "#17A3BE", "#22D3EE", "#67E1F3", "#A5EEF8", "#DCF8FC"] },
+      "critical-rose": { "role": "tertiary", "displayName": "Critical Rose", "canonical": "#F43F5E", "tonalRamp": ["#3D0F18", "#6B1A2A", "#A12640", "#D32F4E", "#F43F5E", "#F8758A", "#FBA6B3", "#FDD9DF"] },
+      "high-orange": { "role": "tertiary", "displayName": "High Orange", "canonical": "#F97316", "tonalRamp": ["#3B1B07", "#6B3009", "#A44A0C", "#D95F10", "#F97316", "#FB9A4F", "#FDBE8C", "#FEE3CD"] },
+      "medium-amber": { "role": "tertiary", "displayName": "Medium Amber", "canonical": "#FBBF24", "tonalRamp": ["#3D2D06", "#6B500A", "#A17A0E", "#D4A11A", "#FBBF24", "#FCD05F", "#FDE19A", "#FEF3D5"] },
+      "low-blue": { "role": "tertiary", "displayName": "Low Blue", "canonical": "#3B82F6", "tonalRamp": ["#0E1E3D", "#173670", "#1F4FA8", "#2A66D4", "#3B82F6", "#6FA3F8", "#A3C3FB", "#D8E6FD"] },
+      "info-slate": { "role": "tertiary", "displayName": "Info Slate", "canonical": "#94A3B8", "tonalRamp": ["#1E242D", "#323C4A", "#4B586A", "#6A7A8F", "#94A3B8", "#B0BCCC", "#CCD4DF", "#E7EBF0"] },
+      "healthy-green": { "role": "secondary", "displayName": "Healthy Green", "canonical": "#34D399", "tonalRamp": ["#0B3324", "#14573E", "#1F7F5C", "#2AA77A", "#34D399", "#6DE2B5", "#A3EDD0", "#D9F8EB"] },
+      "investigating-violet": { "role": "tertiary", "displayName": "Investigating Violet", "canonical": "#A78BFA", "tonalRamp": ["#251B47", "#3F2F7A", "#5C47AD", "#8265D8", "#A78BFA", "#C0AAFC", "#D9CCFD", "#EFE9FE"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Page Title", "purpose": "One per page, with a muted one-line description." },
+      "kpi-value": { "displayName": "KPI Value", "purpose": "The single figure in a KPI card; tabular numerals." },
+      "panel-title": { "displayName": "Panel Title", "purpose": "Heading of a chart or table panel." },
+      "body": { "displayName": "Body", "purpose": "Table cells, definition values, state text." },
+      "label": { "displayName": "Label", "purpose": "Table column headers." },
+      "mono": { "displayName": "Mono", "purpose": "IPs, domains, URLs, hashes, ids, event types only." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "control-transition", "value": "0.15s (background, border-color)", "purpose": "Hover feedback on buttons and nav links." },
+      { "name": "skeleton-pulse", "value": "1.3s ease-in-out infinite, opacity .55 to 1", "purpose": "Loading placeholder; disabled under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "narrow", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "KPI Card",
+      "kind": "card",
+      "refersTo": "kpi-card",
+      "description": "One label, one figure, one factual context line; dot and (when above zero) figure take the severity colour.",
+      "html": "<div class=\"ds-kpi\"><div class=\"ds-kpi-label\"><i></i>Critical</div><div class=\"ds-kpi-value\">3</div><div class=\"ds-kpi-context\">events at critical severity</div></div>",
+      "css": ".ds-kpi{background:#111A2B;border:1px solid #1E2B44;border-radius:10px;padding:15px 18px 14px;color:#E6EDF7;font-family:'Source Sans Pro','Segoe UI',sans-serif;width:220px}.ds-kpi-label{display:flex;align-items:center;gap:8px;color:#9AA9C0;font-size:13px}.ds-kpi-label i{width:8px;height:8px;border-radius:50%;background:#F43F5E}.ds-kpi-value{font-size:1.9rem;font-weight:700;line-height:1.15;margin:6px 0 2px;font-variant-numeric:tabular-nums;color:#F43F5E}.ds-kpi-context{color:#9AA9C0;font-size:13px}"
+    },
+    {
+      "name": "Severity Badge",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Pill with the severity word, 15% tint fill and 40% tint border.",
+      "html": "<span class=\"ds-badge\">Critical</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:600;font-family:'Source Sans Pro',sans-serif;color:#F43F5E;background:color-mix(in srgb,#F43F5E 15%,transparent);border:1px solid color-mix(in srgb,#F43F5E 40%,transparent);white-space:nowrap}"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Header health indicator: dot plus text label.",
+      "html": "<span class=\"ds-pill\"><i></i>API healthy</span>",
+      "css": ".ds-pill{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;border:1px solid #1E2B44;background:#111A2B;color:#E6EDF7;font-size:12.5px;font-family:'Source Sans Pro',sans-serif;white-space:nowrap}.ds-pill i{width:8px;height:8px;border-radius:50%;background:#34D399;display:inline-block}"
+    },
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Quiet panel-toned button; cyan border on hover.",
+      "html": "<button class=\"ds-btn\">Refresh</button>",
+      "css": ".ds-btn{background:#111A2B;border:1px solid #1E2B44;color:#E6EDF7;border-radius:8px;font-size:13.5px;font-family:'Source Sans Pro',sans-serif;padding:6px 14px;cursor:pointer;transition:border-color .15s,background .15s}.ds-btn:hover{border-color:#22D3EE;background:#16223A}.ds-btn:active{background:rgba(34,211,238,.14)}.ds-btn:focus-visible{outline:2px solid #22D3EE;outline-offset:2px}.ds-btn:disabled{opacity:.5}"
+    },
+    {
+      "name": "Sidebar Nav Link",
+      "kind": "nav",
+      "refersTo": "panel",
+      "description": "Muted link; cyan wash on hover and for the current page.",
+      "html": "<div class=\"ds-nav\"><a class=\"ds-nav-link\" href=\"#\">Events</a><a class=\"ds-nav-link current\" href=\"#\">Overview</a></div>",
+      "css": ".ds-nav{background:#0D1525;padding:12px;width:200px;display:grid;gap:4px;font-family:'Source Sans Pro',sans-serif}.ds-nav-link{border-radius:8px;color:#9AA9C0;font-size:14.5px;padding:7px 10px;text-decoration:none;transition:background .15s}.ds-nav-link:hover{background:rgba(34,211,238,.08);color:#E6EDF7}.ds-nav-link.current{background:rgba(34,211,238,.14);color:#E6EDF7;font-weight:600}.ds-nav-link:focus-visible{outline:2px solid #22D3EE;outline-offset:2px}"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "Borderless table with slate row dividers, mono identifiers and right-aligned tabular numbers.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Occurred</th><th>Type</th><th class=\"num\">Risk</th></tr></thead><tbody><tr><td>07 Nov 10:42 UTC</td><td><span class=\"ds-mono\">203.0.113.7</span></td><td class=\"num\"><strong>82</strong></td></tr></tbody></table>",
+      "css": ".ds-table{width:100%;border-collapse:collapse;font-size:13.5px;color:#E6EDF7;font-family:'Source Sans Pro',sans-serif}.ds-table th{text-align:left;color:#9AA9C0;font-weight:600;font-size:12.5px;padding:6px 10px 8px;border-bottom:1px solid #1E2B44}.ds-table td{padding:9px 10px;border-bottom:1px solid #1E2B44}.ds-table tbody tr:hover td{background:#16223A}.ds-table .num{text-align:right;font-variant-numeric:tabular-nums}.ds-mono{font-family:'Source Code Pro',Consolas,monospace;font-size:12.5px}"
+    },
+    {
+      "name": "Empty State",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "Plain info icon, title and muted explanation; no illustration.",
+      "html": "<div class=\"ds-state\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#22D3EE\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 11v5M12 8h.01\"/></svg><div><div class=\"ds-state-title\">No incidents yet</div><div class=\"ds-state-text\">Create one from the Events page.</div></div></div>",
+      "css": ".ds-state{display:flex;gap:14px;align-items:flex-start;padding:18px 4px;font-family:'Source Sans Pro',sans-serif;color:#E6EDF7}.ds-state svg{flex:none;width:22px;height:22px;margin-top:2px}.ds-state-title{font-weight:600;font-size:14.5px;margin:0 0 3px}.ds-state-text{color:#9AA9C0;font-size:13.5px;max-width:62ch}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night-Shift Console",
+    "overview": "A quiet room with the lights down and one instrument panel lit. The ground is deep navy, panels are one step lighter, edges are 1px slate lines, and nothing glows. Cyan is the single accent and is spent on selection, the focus ring, the active nav item, tags and trend. The only other colour that appears is severity, and it never appears alone: every severity colour travels with a text label, so the console reads in greyscale.\n\nThe density is dense but calm, for an analyst triaging on a laptop and for examiners watching a live run. Numbers are tabular, identifiers (IPs, hashes, ids, event types) are monospace, everything else is the sans face.",
+    "keyCharacteristics": [
+      "Navy ground, one cyan accent, severity colours reserved for severity.",
+      "Flat: depth is tonal layering plus 1px borders, no shadows, no glow, no gradients.",
+      "10px panels, 8px controls, pill badges.",
+      "Source Sans Pro for text, Source Code Pro only for identifiers, tabular numerals for counts.",
+      "Colour is always backed by a text label."
+    ],
+    "rules": [
+      { "name": "The Severity-Only Loudness Rule", "body": "Warm and red hues mean severity and nothing else. A KPI figure takes its severity colour only when the count is above zero; zero stays neutral so colour means something when it appears.", "section": "colors" },
+      { "name": "The Label Beside Colour Rule", "body": "A colour that carries meaning (severity, incident status, health) is always accompanied by its word: badge text, pill text, KPI label.", "section": "colors" },
+      { "name": "The One Voice Rule", "body": "Cyan is the only accent. Neutral data (counts by source) uses the dimmed cyan, never a second hue.", "section": "colors" },
+      { "name": "The Mono-Means-Machine Rule", "body": "Monospace is for identifiers and values only, never for headings, labels or prose.", "section": "typography" },
+      { "name": "The Tabular Rule", "body": "Counts and scores use tabular numerals and right alignment in tables.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "A surface is distinguished by its panel tone and border, never by a shadow or glow. Hover and active states change tone or border colour only.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep severity colours bound to severity and always show the label word beside them.",
+      "Do draw every colour from the token set in `theme.py` so CSS, badges and charts agree.",
+      "Do use mono for identifiers only and tabular numerals for counts.",
+      "Do keep panels flat: Panel fill, 1px Slate Border, 10px radius.",
+      "Do label times as UTC and the score as an experimental prioritisation score.",
+      "Do keep focus visible with the 2px cyan outline."
+    ],
+    "donts": [
+      "Don't add a second accent hue or use warm colours for anything but severity.",
+      "Don't add shadows, glow, gradients or decorative widgets.",
+      "Don't use Faint (#64748B) for text.",
+      "Don't carry meaning by colour alone.",
+      "Don't put raw colours in inline styles; Streamlit strips them, so colour travels as a class (`sev-*`, `st-*`)."
+    ]
+  }
+}

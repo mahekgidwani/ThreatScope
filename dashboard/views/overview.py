@@ -13,7 +13,7 @@ NO_EVENTS_HINT = ("Run an adapter to collect some, for example: python -m integr
 
 
 def _percent(part: int, whole: int) -> str:
-    return f"{part / whole:.0%} of all events" if whole else "no events yet"
+    return f"{part / whole:.0%} of all events" if whole else "no events to compare"
 
 
 def _kpis(data: Overview) -> None:

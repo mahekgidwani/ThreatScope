@@ -71,5 +71,5 @@ def test_empty_and_out_of_range_pages(twelve):
 def test_tables_escape_and_label_types():
     hostile = Indicator.model_validate(indicator(1, "url", "http://x.example/<script>"))
     html = c.indicators_full_table([hostile])
-    assert "URL" in html and "<script>" not in html and "&lt;script&gt;" in html and "First seen" in html
+    assert "URL" in html and "<script>" not in html and "&lt;script&gt;" in html and "First recorded" in html
     assert "(events that mentioned it" in c.indicator_detail(hostile) and "&lt;script&gt;" in c.indicator_detail(hostile)

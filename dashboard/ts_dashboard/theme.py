@@ -82,15 +82,18 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible, [tabindex]
 .ts-kpi-label i { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--ts-accent)); }
 .ts-kpi-value { font-size: 1.9rem; font-weight: 700; line-height: 1.15; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
 .ts-kpi-value.lit { color: var(--c); }   /* only when a severity count is above zero */
-.ts-kpi-context { color: var(--ts-muted); font-size: 12.5px; }
+.ts-kpi-context { color: var(--ts-muted); font-size: 13px; }
 .ts-panel-title { font-size: 15px; font-weight: 600; margin: 0; }
-.ts-panel-sub { color: var(--ts-muted); font-size: 12.5px; margin: 2px 0 8px; }
+.ts-panel-sub { color: var(--ts-muted); font-size: 13px; margin: 2px 0 10px; }
 .ts-center { text-align: center; }
-.ts-note { color: var(--ts-muted); font-size: 12px; margin: 10px 0 2px; line-height: 1.4; }
+.ts-note { color: var(--ts-muted); font-size: 13px; margin: 10px 0 16px; line-height: 1.45; }
+
+[data-testid="stForm"] { border: 0; padding: 0; border-top: 1px solid var(--ts-border); padding-top: 14px; border-radius: 0; margin-top: 8px; }
+[class*="st-key-panel-"] [data-testid="stCaptionContainer"] { margin: 14px 0 6px; }
 
 /* tables */
 .ts-table-wrap { overflow-x: auto; }
-.ts-table { width: 100%; border-collapse: collapse; font-size: 13.5px; border: 0 !important; }
+.ts-table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 13.5px; border: 0 !important; }
 .ts-table th, .ts-table td { border-left: 0 !important; border-right: 0 !important; background: transparent; }
 .ts-table th { text-align: left; color: var(--ts-muted); font-weight: 600; font-size: 12.5px; padding: 6px 10px 8px;
   border-top: 0 !important; border-bottom: 1px solid var(--ts-border) !important; white-space: nowrap; }
@@ -99,7 +102,7 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible, [tabindex]
 .ts-table tbody tr:hover td { background: var(--ts-panel-hover) !important; }
 .ts-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .ts-table th.num { text-align: right; }
-.ts-mono { font-family: var(--ts-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.ts-mono { font-family: var(--ts-mono); font-size: 12.5px; overflow-wrap: break-word; }
 .ts-nowrap { white-space: nowrap; }
 .ts-muted { color: var(--ts-muted); }
 .ts-badge { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;

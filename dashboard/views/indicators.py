@@ -11,6 +11,7 @@ from views.common import page_header, require_api
 
 FILTER_KEYS = ("ix_type", "ix_value", "ix_sort", "ix_size")
 CAUTION = "An indicator is something observed in an event. Its presence is a lead to investigate, not proof that it is malicious."
+TIMES = "Recorded = when ThreatScope stored the event that mentioned it. This can be later than when the event occurred."
 
 
 def _clear() -> None:
@@ -56,7 +57,7 @@ def render() -> None:
         a, b, c, d = st.columns([2, 4, 2, 1.5], vertical_alignment="bottom")
         indicator_type = a.selectbox("Type", [None, *INDICATOR_TYPES], key="ix_type",
                                      format_func=lambda v: "Any type" if v is None else INDICATOR_LABELS[v])
-        value = b.text_input("Value (exact match)", key="ix_value", placeholder="e.g. 203.0.113.42, evil.example, a SHA-256 hash")
+        value = b.text_input("Value (exact match)", key="ix_value", placeholder="IP, domain, URL or SHA-256")
         sort = c.selectbox("Sort", SORTS, key="ix_sort")
         size = d.selectbox("Rows per page", PAGE_SIZES, index=1, key="ix_size")
         st.button("Clear filters", icon=":material/filter_alt_off:", on_click=_clear)
@@ -97,6 +98,6 @@ def render() -> None:
         picked = st.selectbox("Inspect an indicator", [None, *by_id], key=f"ix_pick-{hash(signature)}-{result.page}",
                               format_func=lambda v: "Choose an indicator on this page…" if v is None else
                               f"{INDICATOR_LABELS[by_id[v].type]} · {by_id[v].value[:60]}")
-        st.markdown(components.note(CAUTION), unsafe_allow_html=True)
+        st.markdown(components.note(CAUTION + " " + TIMES), unsafe_allow_html=True)
     if picked:
         _detail(api, by_id[picked])

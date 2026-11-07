@@ -1,5 +1,6 @@
-# Dashboard dependencies (runs on the Windows host, not in Docker). plotly is added in Task 2, when a chart needs it.
+# Dashboard dependencies (runs on the Windows host, not in Docker).
 streamlit~=1.43
 httpx~=0.27
 pydantic~=2.10
 pydantic-settings~=2.6
+plotly~=5.24

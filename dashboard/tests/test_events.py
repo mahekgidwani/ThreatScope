@@ -153,7 +153,7 @@ def test_related_events_with_nothing_to_match_on_and_a_cap():
 
 def test_events_table_can_show_a_short_id_column():
     e = Event.model_validate(event(1))
-    assert "<th class=\"\">ID</th>" in c.events_table([e], with_id=True) and "00000000" in c.events_table([e], with_id=True)
+    assert '<th scope="col" class="">ID</th>' in c.events_table([e], with_id=True) and "00000000" in c.events_table([e], with_id=True)
     assert ">ID<" not in c.events_table([e])
 
 

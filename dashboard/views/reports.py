@@ -127,6 +127,8 @@ def render() -> None:
                                                "Reports only summarise events that are stored."), unsafe_allow_html=True)
         return
 
+    _exports(api, report, scope)
+    st.write("")
     left, right = st.columns(2)
     with left.container(key="panel-rp-severity"):
         st.markdown(components.panel_heading("Severity distribution", "Exact counts for the scope above"), unsafe_allow_html=True)
@@ -161,5 +163,4 @@ def render() -> None:
         st.markdown(components.table([("Open", True), ("Investigating", True), ("Closed", True), ("Total", True)],
                                      [[f"<strong>{c['open']}</strong>", f"<strong>{c['investigating']}</strong>", f"<strong>{c['closed']}</strong>",
                                        f"<strong>{c['all']}</strong>"]]), unsafe_allow_html=True)
-    st.write("")
-    _exports(api, report, scope)
+

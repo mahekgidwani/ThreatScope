@@ -32,7 +32,7 @@ def _filter_area(api: ThreatScopeApi) -> tuple[EventFilters | None, str, bool, i
     """Draw the filters. Returns (filters, message, ascending, page_size, search) where `filters` is None when the
     inputs cannot be turned into a query (the message says why)."""
     with st.container(key="panel-filters"):
-        st.text_input("Search", key="ev_search", placeholder="Event ID, source IP address or domain (exact match)",
+        st.text_input("Search", key="ev_search", placeholder="Event ID, IP or domain",
                       help="The API can look up an event by ID and filter by exact source IP or exact domain.")
         a, b, c, d = st.columns(4)
         source = a.selectbox("Source", [None, *SOURCES], key="ev_source",
