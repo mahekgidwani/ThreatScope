@@ -368,3 +368,15 @@ Tests: 144 new (full suite 1098: 890 without PostgreSQL, 208 PostgreSQL-only). M
 counted, rotation check off, half-written line consumed, cookie header stored, `url` added, CRITICAL->critical, offset advanced
 after a connection failure: all made tests fail. Real sample record (dry run): classified XSS, 10 rules, severity high, blocked,
 no payload outside the 100-char query preview. Dev database untouched.
+
+### Task 5 - Zeek evaluation and network decision (done: decision recorded, nothing installed)
+File: `docs/NETWORK_DECISION.md` (full evidence and tables). No code, no Docker change, no image pulled.
+Measured: Docker Desktop on WSL2 (8.2 GB VM, 12 CPUs); **C: has about 1.6 GB free and Docker's 25.7 GB data file is on C:**; no
+Wireshark/tshark; `pktmon` and Npcap exist. From Zeek's docs: Windows support is experimental and tested on pcap files, not live
+capture; the official `zeek/zeek` image is 165 MB compressed (registry manifest, no pull) and does not run Zeek by itself;
+`zeek -r file.pcap LogAscii::use_json=T` writes JSON logs; detections are notices (`notice.log`), scan detection is a policy script.
+Live capture is not possible here (Docker Desktop cannot see the host NIC; a sensor on `threascope_default` would only see our own
+containers). Option 2 (a simpler adapter) has no honest data source and would mean inventing detections. Decision: **option 1,
+offline mode only** (Zeek on a recorded pcap in a throw-away container, adapter reads Zeek's own `notice.log`), conditional on three
+approvals: G1 free disk safely (prune only Docker build cache), G2 pull `zeek/zeek`, G3 a pcap that contains a real detection.
+Without G1 the answer is option 3 (defer), and nothing else in Phase 3 depends on it.
