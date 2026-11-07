@@ -236,3 +236,28 @@ random fake one, so tests never use the real key.
 Known limit: `ValidationError.errors()` (not `str()`) still contains the raw input; the app never logs it.
 Common errors: `ValidationError ... ingest_api_key` = key missing/weak in `.env`; `ModuleNotFoundError: app` when running
 pytest outside `backend/` (run it from there or in the container).
+
+## Phase 3 - Integrations and event collection
+Branch `phase3/integrations`. Rule for every adapter: Source -> Adapter -> ThreatScope API -> Validation ->
+Indicator extraction -> Risk scoring -> PostgreSQL. Adapters never touch the database.
+
+### Task 1 - Shared integration foundation (done)
+Files: `backend/integrations/{__init__,config,client}.py`, `backend/tests/integrations/`, `httpx` moved from
+`requirements-dev.txt` to `requirements.txt` (adapters need it at run time; it was already installed in the image).
+What: `ThreatScopeClient.submit_event(dict)` sends `POST /api/v1/events` with the `X-API-Key` header and returns
+`SubmitResult(event_id, created)`. HTTP 409 `duplicate_event` is a normal result (`created=False`, existing id), not an
+error. Everything else raises a subclass of `IntegrationError` with `.retryable`: connection/timeout/5xx = retryable;
+401/403 (`ApiAuthError`), other 4xx (`ApiRejectedError`, includes field paths and messages from the API) and
+unusable answers (`ApiResponseError`) = not retryable. The client never retries by itself; each adapter decides.
+`stable_event_id(prefix, *parts)` builds a repeatable `external_event_id` (`prefix:` + 32 hex of SHA-256) so reading
+the same log line / scanning the same file twice is rejected by the API's unique key instead of stored twice.
+Settings (`IntegrationSettings`): `INGEST_API_KEY` (required, same variable as the API), `THREATSCOPE_API_URL`
+(default `http://127.0.0.1:8000`; scheme://host:port only, no credentials/path/query), `THREATSCOPE_TIMEOUT_SECONDS`
+(default 10, max 120). No database variables are needed.
+Safety: the key is a `SecretStr`, only goes into the request header, is scrubbed from server-supplied error text,
+and is never logged; redirects are not followed (the key would travel with them); proxy environment variables are
+ignored (`trust_env=False`). The client does not duplicate validation: the API validates, and its 422 details are surfaced.
+Tests: 58 new. Fake-server tests (MockTransport and real sockets for refused connection and silent server),
+and contract tests against the REAL app on SQLite and PostgreSQL. Mutation check: removing the key scrub, enabling
+redirects and breaking the duplicate branch made 6 tests fail; restored.
+Common errors: `ApiAuthError` = wrong `INGEST_API_KEY`; `ApiConnectionError` = API not running or wrong URL.
