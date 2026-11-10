@@ -61,6 +61,22 @@ def test_indicators_list_filters_and_caution(monkeypatch):
     assert "No indicators match" in text(at)
 
 
+def test_a_partial_ip_filter_shows_a_rejected_filter_state_not_the_unavailable_panel(monkeypatch):
+    at = run(monkeypatch, backend(), "indicators")
+    at.selectbox(key="ix_type").select("ip").run()
+    at.text_input(key="ix_value").input("203.0.113").run()
+    page = text(at)
+    assert not at.exception
+    assert "Not a valid IP or domain" in page and "did not accept" in page
+    assert "Use Refresh" not in page and "Indicators are unavailable" not in page
+    assert at.selectbox(key="ix_type").value == "ip" and at.text_input(key="ix_value").value == "203.0.113"
+
+
+def test_value_label_does_not_promise_normalisation_for_any_type(monkeypatch):
+    at = run(monkeypatch, backend(), "indicators")
+    assert at.text_input(key="ix_value").label == "Value (normalised when Type is IP or domain)"
+
+
 def test_indicator_detail_lists_related_events_from_every_source(monkeypatch):
     at = run(monkeypatch, backend(), "indicators")
     select(at, "Inspect an indicator").select(2).run()                      # evil.example

@@ -159,6 +159,9 @@ def _create_panel(api: ThreatScopeApi) -> None:
             else:
                 st.session_state["ic_last"] = event_ids
                 _done(f"Incident #{created.id} created", created.id)
+        if bool(event_ids) and event_ids == st.session_state.get("ic_last"):
+            st.markdown(components.note("These events were just grouped into an incident. Choose different events to create another."),
+                        unsafe_allow_html=True)
 
 
 # ---- the page ---------------------------------------------------------------------------------------------

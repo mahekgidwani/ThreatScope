@@ -103,6 +103,20 @@ def test_no_secret_or_api_key_in_the_rendered_page(monkeypatch):
     assert "SECRETKEY" not in html(at) and "SECRETKEY" not in repr(at)
 
 
+def test_overview_with_only_far_dated_events_says_why_the_chart_is_empty(monkeypatch):
+    at = run(monkeypatch, FakeBackend(events=[event(1, at=datetime(1900, 1, 1, tzinfo=timezone.utc))]))
+    chart = html(at).split("Events over time")[1].split("Events by severity")[0]
+    assert not at.exception
+    assert "No event times within the last ~10 years to plot" in chart and "Run an adapter" not in chart
+    assert "No events to plot" not in html(at)
+
+
+def test_overview_with_no_events_keeps_the_adapter_hint_in_the_chart(monkeypatch):
+    at = run(monkeypatch, FakeBackend())
+    chart = html(at).split("Events over time")[1].split("Events by severity")[0]
+    assert "No events to plot" in chart and "Run an adapter" in chart
+
+
 def test_overview_with_far_dated_events_renders_and_says_they_are_left_out_of_the_chart(monkeypatch):
     far = [event(2, at=datetime(9999, 6, 1, tzinfo=timezone.utc)), event(3, at=datetime(1900, 1, 1, tzinfo=timezone.utc))]
     at = run(monkeypatch, FakeBackend(events=[event(1), *far]))

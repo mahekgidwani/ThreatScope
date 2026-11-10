@@ -25,8 +25,9 @@ def fmt_time(moment: datetime) -> str:
 
 
 def percent(part: int, whole: int) -> str:
-    """A whole-number share; a small non-zero one reads "<1%", never "0%"."""
-    return "<1%" if 0 < part / whole < 0.005 else f"{part / whole:.0%}"
+    """A whole-number share; a share that would round to 0% or 100% without being it reads "<1%" or ">99%"."""
+    share = part / whole
+    return "<1%" if 0 < share <= 0.005 else ">99%" if 0.995 <= share < 1 else f"{share:.0%}"
 
 
 def fmt_time_short(moment: datetime) -> str:

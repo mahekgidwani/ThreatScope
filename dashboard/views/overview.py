@@ -39,7 +39,9 @@ def _charts(data: Overview) -> None:
     with wide.container(key="panel-trend"):
         if data.trend is None:
             st.markdown(components.panel_heading("Events over time", "By occurrence time, split by severity"), unsafe_allow_html=True)
-            st.markdown(components.empty_state("No events to plot", NO_EVENTS_HINT), unsafe_allow_html=True)
+            st.markdown(components.empty_state("No events to plot", NO_EVENTS_HINT) if not data.total_events else
+                        components.empty_state("No event times within the last ~10 years to plot",
+                                               "The events have occurrence times outside the chart range."), unsafe_allow_html=True)
         else:
             size = STEP_NAMES.get(int(data.trend.step.total_seconds()), "bucket")
             sub = f"One bar per {size}, by occurrence time (UTC), split by severity"

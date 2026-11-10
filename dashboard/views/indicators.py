@@ -2,7 +2,7 @@
 import streamlit as st
 
 from ts_dashboard import components
-from ts_dashboard.api_client import ApiError, ThreatScopeApi
+from ts_dashboard.api_client import ApiError, ApiRejectedError, ThreatScopeApi
 from ts_dashboard.correlation import events_with_indicator, scan_events
 from ts_dashboard.indicators import PAGE_SIZES, SORT_SCAN, SORTS, fetch_indicator_page
 from ts_dashboard.models import INDICATOR_TYPES, Indicator
@@ -58,7 +58,7 @@ def render() -> None:
         a, b, c, d = st.columns([2, 4, 2, 1.5], vertical_alignment="bottom")
         indicator_type = a.selectbox("Type", [None, *INDICATOR_TYPES], key="ix_type",
                                      format_func=lambda v: "Any type" if v is None else INDICATOR_LABELS[v])
-        value = b.text_input("Value (exact; IP and domain are normalised)", key="ix_value", placeholder="IP, domain, URL or SHA-256")
+        value = b.text_input("Value (normalised when Type is IP or domain)", key="ix_value", placeholder="IP, domain, URL or SHA-256")
         sort = c.selectbox("Sort", SORTS, key="ix_sort")
         size = d.selectbox("Rows per page", PAGE_SIZES, index=1, key="ix_size")
         st.button("Clear filters", icon=":material/filter_alt_off:", on_click=_clear)
@@ -69,6 +69,9 @@ def render() -> None:
         st.session_state["ix_sig"], st.session_state["ix_page"] = signature, 0
     try:
         result = fetch_indicator_page(api, indicator_type, value, st.session_state.get("ix_page", 0), size, sort)
+    except ApiRejectedError as error:      # e.g. a partial IP: the filter is wrong, so Refresh would not help
+        st.markdown(components.empty_state("Not a valid IP or domain", error.user_message), unsafe_allow_html=True)
+        return
     except ApiError as error:
         st.markdown(components.error_state("Indicators are unavailable", error.user_message + " Use Refresh to try again."),
                     unsafe_allow_html=True)

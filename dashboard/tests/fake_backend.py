@@ -76,6 +76,8 @@ class FakeBackend:
             found = [e for e in self.events if e["id"] == path.rsplit("/", 1)[1]]
             return httpx.Response(200, json=found[0]) if found else self._error(404, "not_found", "Event not found")
         if path == "/api/v1/indicators":
+            if q.get("type") == "ip" and q.get("value", "").count(".") != 3:      # the real API validates ip/domain filters
+                return self._error(422, "invalid_filter", "value is not a valid IP address")
             rows = [i for i in self.indicators if q.get("type") in (None, i["type"]) and q.get("value") in (None, i["value"])]
             return self._page(sorted(rows, key=lambda i: (i["last_seen"], i["id"]), reverse=True), q)
         if path == "/api/v1/incidents" and request.method == "GET":

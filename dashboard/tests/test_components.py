@@ -158,3 +158,9 @@ def test_credentials_are_hidden_before_long_values_are_shortened():
 def test_small_share_shows_less_than_one_percent():
     assert c.percent(1, 1000) == "<1%" and c.percent(4, 1000) == "<1%"
     assert c.percent(0, 1000) == "0%" and c.percent(6, 1000) == "1%" and c.percent(1, 2) == "50%" and c.percent(7, 7) == "100%"
+    assert c.percent(1, 200) == "<1%" and c.percent(3, 600) == "<1%"          # exactly 0.5% is not "0%"
+
+
+def test_a_share_just_under_all_shows_more_than_99_percent():
+    assert c.percent(199, 200) == ">99%" and c.percent(995, 1000) == ">99%" and c.percent(994, 1000) == "99%"
+    assert c.percent(1000, 1000) == "100%" and c.percent(99, 100) == "99%"

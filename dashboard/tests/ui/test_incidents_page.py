@@ -230,6 +230,18 @@ def test_a_second_create_from_the_same_shared_indicator_is_not_offered(monkeypat
     assert len(writes(b)) == 1
 
 
+def test_the_disabled_create_button_explains_itself_for_the_same_events(monkeypatch):
+    note = "These events were just grouped into an incident. Choose different events to create another."
+    at = run(monkeypatch, backend(incidents=[]))
+    assert note not in text(at)
+    button(at, "Create incident").click().run()
+    assert button(at, "Create incident").disabled and note in text(at)
+    at.radio(key="ic_mode").set_value("From event IDs").run()
+    assert note not in text(at)                                                # different (empty) selection: no note
+    box(at, "Event IDs").set_value(f"{E2} {E1}").run()
+    assert note in text(at)                                                    # same ids typed again
+
+
 def test_creating_with_an_unknown_event_shows_the_api_error(monkeypatch):
     b = backend(incidents=[])
     at = run(monkeypatch, b)
