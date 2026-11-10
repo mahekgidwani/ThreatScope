@@ -24,6 +24,11 @@ def fmt_time(moment: datetime) -> str:
     return moment.astimezone(timezone.utc).strftime("%d %b %Y %H:%M UTC")
 
 
+def percent(part: int, whole: int) -> str:
+    """A whole-number share; a small non-zero one reads "<1%", never "0%"."""
+    return "<1%" if 0 < part / whole < 0.005 else f"{part / whole:.0%}"
+
+
 def fmt_time_short(moment: datetime) -> str:
     """For narrow tables: no year (the panel subtitle says UTC)."""
     return moment.astimezone(timezone.utc).strftime("%d %b %H:%M")

@@ -116,6 +116,7 @@ def _create_panel(api: ThreatScopeApi) -> None:
             st.markdown(components.empty_state("Read-only", ApiWriteDisabledError.user_message), unsafe_allow_html=True)
             return
         mode = st.radio("Group events", ["From a shared indicator", "From event IDs"], horizontal=True, key="ic_mode")
+        n = st.session_state.get("ic_form_n", 0)                  # bumped by _done: new keys, so the typed values are cleared after a create
         event_ids: list[str] = []
         suggestion = ""
         if mode == "From a shared indicator":
@@ -131,7 +132,7 @@ def _create_panel(api: ThreatScopeApi) -> None:
                             unsafe_allow_html=True)
                 return
             by_id = {k.indicator.id: k for k in clusters}
-            chosen = by_id[st.selectbox("Shared indicator", list(by_id), key="ic_cluster",
+            chosen = by_id[st.selectbox("Shared indicator", list(by_id), key=f"ic_cluster-{n}",
                                         format_func=lambda v: f"{INDICATOR_LABELS[by_id[v].indicator.type]} · "
                                         f"{redact(by_id[v].indicator.value)[:60]} · {by_id[v].count} events")]
             event_ids = [str(e.id) for e in chosen.events[:MAX_EVENT_IDS]]
@@ -139,22 +140,24 @@ def _create_panel(api: ThreatScopeApi) -> None:
             st.markdown(components.note(f"{len(event_ids)} events will be grouped."
                                         + (f" (the newest {MAX_EVENT_IDS})" if chosen.count > MAX_EVENT_IDS else "")), unsafe_allow_html=True)
         else:
-            raw = st.text_area("Event IDs", height=100, key="ic_ids", placeholder="One event ID per line, or separated by spaces or commas")
+            raw = st.text_area("Event IDs", height=100, key=f"ic_ids-{n}", placeholder="One event ID per line, or separated by spaces or commas")
             event_ids, bad = parse_event_ids(raw)
             if bad:
                 st.markdown(components.error_state("Some IDs are not event IDs", ", ".join(bad[:5])), unsafe_allow_html=True)
             if len(event_ids) > MAX_EVENT_IDS:
                 st.markdown(components.error_state("Too many events", f"An incident takes at most {MAX_EVENT_IDS} events at a time."),
                             unsafe_allow_html=True)
-        title = st.text_input("Title", value=suggestion, key=f"ic_title-{mode}-{suggestion}", max_chars=200)
-        notes = st.text_area("Notes (optional)", key="ic_new_notes", height=80, max_chars=5000, help=NOTES_HELP)
-        ready = bool(event_ids) and len(event_ids) <= MAX_EVENT_IDS and bool(title.strip())
+        title = st.text_input("Title", value=suggestion, key=f"ic_title-{n}-{mode}-{suggestion}", max_chars=200)
+        notes = st.text_area("Notes (optional)", key=f"ic_new_notes-{n}", height=80, max_chars=5000, help=NOTES_HELP)
+        # a shared indicator stays selectable after a create: refuse the same events twice in a row
+        ready = bool(event_ids) and len(event_ids) <= MAX_EVENT_IDS and bool(title.strip()) and event_ids != st.session_state.get("ic_last")
         if st.button("Create incident", icon=":material/add_circle:", disabled=not ready, key="ic_create"):
             try:
                 created = api.create_incident(title, event_ids, notes or None)
             except ApiError as error:
                 _error("The incident was not created", error)
             else:
+                st.session_state["ic_last"] = event_ids
                 _done(f"Incident #{created.id} created", created.id)
 
 

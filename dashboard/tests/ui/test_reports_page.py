@@ -57,6 +57,12 @@ def test_report_sections_numbers_and_labels(monkeypatch):
     assert "Download summary report (Markdown)" in labels and "Download incident summary (Markdown)" in labels
 
 
+def test_high_risk_subtitle_names_the_sample_only_when_sampled(monkeypatch):
+    assert "newest 200 per severity" not in text(run(monkeypatch, backend()))
+    big = FakeBackend(events=[event(n, severity="high") for n in range(1, 202)])
+    assert "from the newest 200 per severity" in text(run(monkeypatch, big))
+
+
 def test_filters_change_the_report(monkeypatch):
     at = run(monkeypatch, backend())
     at.selectbox(key="rp_source").select("file").run()

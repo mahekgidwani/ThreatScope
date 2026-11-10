@@ -153,3 +153,8 @@ def test_credentials_are_hidden_before_long_values_are_shortened():
     long_url = "http://admin:" + "p" * 60 + "@host/x"
     html = c.events_table([parsed(url=long_url)]) + c.high_risk_table([parsed(url=long_url)])
     assert "admin:" not in html and "ppppp" not in html and "[redacted]" in html
+
+
+def test_small_share_shows_less_than_one_percent():
+    assert c.percent(1, 1000) == "<1%" and c.percent(4, 1000) == "<1%"
+    assert c.percent(0, 1000) == "0%" and c.percent(6, 1000) == "1%" and c.percent(1, 2) == "50%" and c.percent(7, 7) == "100%"

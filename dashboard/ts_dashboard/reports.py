@@ -58,6 +58,10 @@ class Report:
     def truncated(self) -> bool:
         return self.analysed < self.total
 
+    @property
+    def high_risk_sampled(self) -> bool:
+        return any(self.by_severity[s] > HIGH_RISK_SCAN for s in HIGH_RISK_SEVERITIES)
+
 
 def _utc(moment: datetime) -> str:
     return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -174,7 +178,8 @@ def report_markdown(report: Report) -> str:
     lines += ["", "### By source", ""] + _table(["Source", "Events"], [[SOURCE_LABELS[s], report.by_source[s]] for s in SOURCES])
     if report.event_types:
         lines += ["", "### Most frequent event types", ""] + _table(["Event type", "Events"], [list(t) for t in report.event_types])
-    lines += ["", "## High-risk events", "", "Critical and high severity events with the highest experimental risk scores.", ""]
+    lines += ["", "## High-risk events", "", "Critical and high severity events with the highest experimental risk scores"
+              + (f", from the newest {HIGH_RISK_SCAN} per severity." if report.high_risk_sampled else "."), ""]
     lines += _table(["Event ID", "Occurred (UTC)", "Type", "Severity", "Risk", "Indicator"], _event_rows(report.high_risk)) if report.high_risk \
         else ["None in scope."]
     lines += ["", "## Recurring indicators", "", "Indicators found in more than one event of this scope. A recurring indicator is a lead, not proof of malicious activity.", ""]

@@ -13,7 +13,7 @@ NO_EVENTS_HINT = ("Run an adapter to collect some, for example: python -m integr
 
 
 def _percent(part: int, whole: int) -> str:
-    return f"{part / whole:.0%} of all events" if whole else "no events to compare"
+    return f"{components.percent(part, whole)} of all events" if whole else "no events to compare"
 
 
 def _kpis(data: Overview) -> None:
@@ -24,7 +24,7 @@ def _kpis(data: Overview) -> None:
                             f"from {sources_reporting} of {len(data.by_source)} sources" if data.total_events else "no events yet"),
         components.kpi_card("Critical events", data.by_severity["critical"], _percent(data.by_severity["critical"], data.total_events),
                             "critical"),
-        components.kpi_card("High-risk events", data.by_severity["high"], _percent(data.by_severity["high"], data.total_events),
+        components.kpi_card("High severity events", data.by_severity["high"], _percent(data.by_severity["high"], data.total_events),
                             "high"),
         components.kpi_card("Total indicators", data.total_indicators,
                             f"{data.repeated_indicators}{plus} recurring" if data.total_indicators else "none extracted yet"),

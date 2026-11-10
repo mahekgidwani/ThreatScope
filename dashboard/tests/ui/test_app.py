@@ -44,13 +44,20 @@ def test_overview_shows_real_numbers_and_healthy_status(monkeypatch):
     assert not at.exception
     text = html(at)
     assert "API healthy" in text and "Database healthy" in text
-    for expected in ("Total events", "Critical events", "High-risk events", "Total indicators", "Open incidents",
+    for expected in ("Total events", "Critical events", "High severity events", "Total indicators", "Open incidents",
                      "Events over time", "Events by severity", "Events by source", "Recent security events",
                      "Top recurring indicators", "Recent high-risk activity", "not a probability of compromise"):
         assert expected in text, expected
     assert '<div class="ts-kpi-value">3</div>' in text            # total events
     assert len(at.get("plotly_chart")) == 3
     assert {r.method for r in backend.requests} == {"GET"}
+
+
+def test_kpi_is_named_high_severity(monkeypatch):
+    at = run(monkeypatch, FakeBackend(events=[event(1, severity="critical"), event(2, severity="high")]))
+    text = html(at)
+    assert "High severity events" in text and "High-risk events" not in text
+    assert "Recent high-risk activity" in text                  # that panel does include critical, so it keeps its name
 
 
 def test_empty_database_shows_intentional_empty_states_and_no_charts(monkeypatch):

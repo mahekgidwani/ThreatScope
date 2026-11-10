@@ -9,7 +9,7 @@ from ts_dashboard.events import CUSTOM_RANGE, RANGE_PRESETS, EventFilters, time_
 from ts_dashboard.models import SEVERITIES, SOURCES
 from ts_dashboard.redact import redact
 from ts_dashboard.reports import (
-    EXPORT_MAX, build_report, describe_scope, events_to_csv, fetch_export, incident_markdown, report_markdown,
+    EXPORT_MAX, HIGH_RISK_SCAN, build_report, describe_scope, events_to_csv, fetch_export, incident_markdown, report_markdown,
 )
 from ts_dashboard.theme import INDICATOR_LABELS, SCORE_NOTE, SEVERITY_LABELS, SOURCE_LABELS
 from views.common import page_header, require_api
@@ -114,7 +114,7 @@ def render() -> None:
 
     high = report.by_severity["critical"] + report.by_severity["high"]
     cards = [components.kpi_card("Events in scope", report.total, describe_scope(scope)),
-             components.kpi_card("Critical or high", high, f"{high / report.total:.0%} of events in scope" if report.total else "no events in scope",
+             components.kpi_card("Critical or high", high, f"{components.percent(high, report.total)} of events in scope" if report.total else "no events in scope",
                                  "critical" if report.by_severity["critical"] else ("high" if report.by_severity["high"] else None)),
              components.kpi_card("Sources reporting", sum(1 for n in report.by_source.values() if n), f"of {len(report.by_source)} sources"),
              components.kpi_card("Recurring indicators", len(report.recurring), "in 2+ events of this scope")]
@@ -144,7 +144,10 @@ def render() -> None:
         st.markdown(components.table([("Event type", False), ("Events", True)],
                                      [[components.cell_mono(t), f"<strong>{n}</strong>"] for t, n in report.event_types]), unsafe_allow_html=True)
     with st.container(key="panel-rp-high"):
-        st.markdown(components.panel_heading("High-risk events", "Critical and high severity, highest experimental risk score first"), unsafe_allow_html=True)
+        sub = "Critical and high severity, highest experimental risk score first"
+        if report.high_risk_sampled:
+            sub += f" · from the newest {HIGH_RISK_SCAN} per severity"
+        st.markdown(components.panel_heading("High-risk events", sub), unsafe_allow_html=True)
         if report.high_risk:
             st.markdown(components.events_table(report.high_risk, with_id=True) + components.note(SCORE_NOTE), unsafe_allow_html=True)
         else:

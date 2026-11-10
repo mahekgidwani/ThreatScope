@@ -171,6 +171,14 @@ def test_report_markdown_has_every_section_and_the_caveats():
         assert expected in text, expected
 
 
+def test_high_risk_report_says_newest_200_per_severity_when_sampled():
+    big = FakeBackend(events=[event(n, severity="high") for n in range(1, 202)])
+    sampled = rp.report_markdown(rp.build_report(api_for(big), EventFilters(), NOW))
+    assert "from the newest 200 per severity" in sampled
+    small = rp.report_markdown(rp.build_report(api_for(sample_backend()), EventFilters(), NOW))
+    assert "newest 200" not in small
+
+
 def test_markdown_cells_cannot_break_the_table():
     detail = IncidentDetail.model_validate({**incident(1, "open", "high", ()), "event_count": 1, "title": "a | b\nc", "summary": "see http://u:secret@x.example",
                                            "events": [event(1, source_ip="1.2.3.4|x")]})

@@ -55,6 +55,12 @@ def writes(b: FakeBackend):
     return [r for r in b.requests if r.method != "GET"]
 
 
+def box(at: AppTest, label: str):
+    """A create-form widget by its label (its key changes after every create, so the key is not a stable handle).
+    The create panel is the last on the page, after the editor of a focused incident, which has a "Title" too."""
+    return [w for w in [*at.text_input, *at.text_area] if w.label == label][-1]
+
+
 # ---- reading ---------------------------------------------------------------------------------------------
 
 def test_summary_cards_list_and_detail(monkeypatch):
@@ -191,20 +197,44 @@ def test_create_from_ids_validates_before_enabling_the_button(monkeypatch):
     at = run(monkeypatch, b)
     at.radio(key="ic_mode").set_value("From event IDs").run()
     assert button(at, "Create incident").disabled
-    at.text_area(key="ic_ids").set_value(f"{E3} garbage").run()
+    box(at, "Event IDs").set_value(f"{E3} garbage").run()
     assert "Some IDs are not event IDs" in text(at)
-    at.text_area(key="ic_ids").set_value(E3).run()
+    box(at, "Event IDs").set_value(E3).run()
     next(t for t in at.text_input if t.label == "Title").set_value("Dropped file").run()
     assert not button(at, "Create incident").disabled
     button(at, "Create incident").click().run()
     assert b.incidents[0]["event_ids"] == [E3] and b.incidents[0]["title"] == "Dropped file" and b.incidents[0]["severity"] == "low"
 
 
+def test_create_form_is_cleared_after_a_successful_create(monkeypatch):
+    b = backend(incidents=[])
+    at = run(monkeypatch, b)
+    at.radio(key="ic_mode").set_value("From event IDs").run()
+    box(at, "Event IDs").set_value(E3).run()
+    box(at, "Title").set_value("Dropped file").run()
+    box(at, "Notes (optional)").set_value("seen once").run()
+    button(at, "Create incident").click().run()
+    assert len(b.incidents) == 1
+    assert box(at, "Event IDs").value == "" and box(at, "Title").value == "" and box(at, "Notes (optional)").value == ""
+    assert button(at, "Create incident").disabled
+    at.run()                                                  # a rerun must not repeat the create either
+    assert len(b.incidents) == 1 and len(writes(b)) == 1
+
+
+def test_a_second_create_from_the_same_shared_indicator_is_not_offered(monkeypatch):
+    b = backend(incidents=[])
+    at = run(monkeypatch, b)
+    button(at, "Create incident").click().run()
+    assert len(b.incidents) == 1
+    assert button(at, "Create incident").disabled and box(at, "Notes (optional)").value == ""
+    assert len(writes(b)) == 1
+
+
 def test_creating_with_an_unknown_event_shows_the_api_error(monkeypatch):
     b = backend(incidents=[])
     at = run(monkeypatch, b)
     at.radio(key="ic_mode").set_value("From event IDs").run()
-    at.text_area(key="ic_ids").set_value("11111111-1111-4111-8111-111111111111").run()
+    box(at, "Event IDs").set_value("11111111-1111-4111-8111-111111111111").run()
     next(t for t in at.text_input if t.label == "Title").set_value("Ghost").run()
     button(at, "Create incident").click().run()
     assert "The incident was not created" in text(at) and "That record was not found" in text(at) and b.incidents == []
