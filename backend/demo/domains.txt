@@ -1,0 +1,7 @@
+# demo feed of newly registered domains (fictional; nothing here is a real finding)
+paypa1.com
+paypal-secure-login.example
+microsoft-login.example
+rnicrosoft.example
+weather-report.example
+gardening-tips.example

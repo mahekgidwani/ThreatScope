@@ -105,14 +105,18 @@ inside a throw-away container is lost with it; mount a folder for it if incremen
 
 ## 7. A short demo (nothing is stored until the last step)
 
-1. `docker compose exec backend python -m integrations.opensquat_adapter --keyword paypal --domains /tmp/feed.txt --dry-run`
-   prints the domain events it would send; lines like `paypa1.com` or an `xn--` homograph show the detection logic.
-2. `docker compose exec backend python -m integrations.modsec_adapter /tmp/modsec_audit.log --dry-run` shows the honeypot events
+Demo files live in `backend/demo/` (the only folder the container sees): `keywords.txt`, `domains.txt`, `modsec_audit.log`
+(five attacks, four from `203.0.113.50`) and `note.txt`. All data is fictional (documentation IP ranges, `.example` domains).
+
+1. `docker compose run --rm backend python -m integrations.opensquat_adapter --keywords demo/keywords.txt --domains demo/domains.txt --dry-run`
+   prints the domain events it would send; lines like `paypa1.com` show the detection logic.
+2. `docker compose run --rm backend python -m integrations.modsec_adapter demo/modsec_audit.log --dry-run` shows the honeypot events
    with attack category, severity and the redacted request summary.
-3. `docker compose exec backend python -m integrations.analyse_file /tmp/invoice.pdf --dry-run` shows the file event with its
-   review markers and found indicators.
-4. Run the same commands without `--dry-run`; then open `http://127.0.0.1:8000/docs` and call `GET /api/v1/events?source=...` and
-   `GET /api/v1/indicators`: repeated attacker IPs show a rising `sighting_count` and a higher `risk_score` (docs/RISK_SCORING.md).
+3. `docker compose run --rm backend python -m integrations.analyse_file demo/note.txt --dry-run` shows the file event with the
+   indicators found inside the note.
+4. Run the same commands without `--dry-run`, or all three at once with `.ackend\demo\load-demo.ps1` (from the repo root; `-DryRun`
+   previews). Then open `http://127.0.0.1:8000/docs` and call `GET /api/v1/events?source=...` and `GET /api/v1/indicators`:
+   the repeated attacker IP shows a rising `sighting_count` and a higher `risk_score` (docs/RISK_SCORING.md).
 5. Run step 4 again: everything is "already recorded".
 
 ## 8. Verification
