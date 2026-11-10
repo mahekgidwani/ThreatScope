@@ -52,7 +52,9 @@ def _parser() -> argparse.ArgumentParser:
 def iter_lines(path):
     """Stripped lines of a text file. A line longer than MAX_LINE (or undecodable text) is
     yielded as None, and the rest of an over-long line is skipped without being held in memory."""
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+    with open(path, "rb") as probe:   # PowerShell 5.1 writes UTF-16 with a BOM; Notepad may add a UTF-8 BOM
+        encoding = "utf-16" if probe.read(2) in (b"\xff\xfe", b"\xfe\xff") else "utf-8-sig"
+    with open(path, "r", encoding=encoding, errors="replace") as handle:
         while line := handle.readline(MAX_LINE + 1):
             if len(line) > MAX_LINE and not line.endswith("\n"):
                 while (rest := handle.readline(65536)) and not rest.endswith("\n"):

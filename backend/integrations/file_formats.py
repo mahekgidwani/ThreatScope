@@ -8,6 +8,7 @@ Limits to remember: a PDF's markers can hide inside compressed streams or obfusc
 so "no markers found" never means "safe".
 """
 import html
+import lzma
 import re
 import struct
 import zipfile
@@ -160,7 +161,7 @@ def _read_part(archive: zipfile.ZipFile, name: str, result: FormatResult) -> byt
     try:
         with archive.open(name) as part:
             data = part.read(MAX_MEMBER_BYTES + 1)
-    except (RuntimeError, zipfile.BadZipFile, zlib.error, NotImplementedError, EOFError, OSError):
+    except (RuntimeError, zipfile.BadZipFile, zlib.error, lzma.LZMAError, NotImplementedError, EOFError, OSError):
         result.note("unreadable_part", f"{name} could not be read (encrypted or damaged)")
         return b""
     if len(data) > MAX_MEMBER_BYTES:

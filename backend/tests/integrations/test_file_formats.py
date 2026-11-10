@@ -238,3 +238,17 @@ def test_jpeg_with_endless_padding_does_not_hang(tmp_path):
     report = analyse_file(write(tmp_path, "a.jpg", b"\xff\xd8" + b"\xff" * 500_000))
     assert time.perf_counter() - started < 2
     assert report.detected_type == "jpeg"
+
+
+def test_corrupt_lzma_member_is_a_clean_error(tmp_path):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_LZMA) as archive:
+        archive.writestr("[Content_Types].xml", b"<Types/>")
+        archive.writestr("word/document.xml", b"<w:document>" + b"hello world " * 200 + b"</w:document>")
+    data = bytearray(buffer.getvalue())
+    entry = zipfile.ZipFile(io.BytesIO(bytes(data))).getinfo("word/document.xml")
+    offset = entry.header_offset + 30 + len(entry.filename.encode()) + 4 + 4   # past the local header + LZMA props
+    data[offset:offset + 16] = b"\xff" * 16
+    report = analyse_file(write(tmp_path, "a.docx", bytes(data)))   # must not raise
+    assert report.detected_type == "docx"
+    assert "unreadable_part" in rules(report)

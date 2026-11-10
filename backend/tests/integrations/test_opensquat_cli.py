@@ -1,4 +1,5 @@
 """The openSquat adapter command line: files in, ThreatScope events out."""
+import codecs
 import json
 
 import httpx
@@ -215,3 +216,24 @@ def test_hostile_domain_file_does_not_crash(files, capsys):
                     b"paypa1.com\n" + b"a" * 5_000_000 + b"\n" + b"\xff\xfe\x00binary\x00\n" + b"paypal.xyz\n")
     code, out, _ = run(["--keyword", "paypal", "--domains", str(hostile)], capsys, client=fake_client(created))
     assert code == 0 and "stored 2" in out and "skipped 2 invalid" in out
+
+
+def test_domain_list_encodings_all_work(files, capsys):
+    text = "paypa1.com paypal.xyz example.com ".replace(" ", chr(10))
+    encodings = {"utf8": text.encode("utf-8"), "bom": text.encode("utf-8-sig"),
+                 "utf16": text.encode("utf-16"), "utf16be": codecs.BOM_UTF16_BE + text.encode("utf-16-be")}
+    results = {}
+    for name, raw in encodings.items():
+        domains = write(files["tmp"], f"{name}.txt", raw)
+        code, out, _ = run(["--keyword", "paypal", "--domains", str(domains), "--dry-run"], capsys)
+        assert code == 0
+        results[name] = sorted(json.loads(line)["domain"] for line in out.splitlines() if line.startswith("{"))
+        assert "Checked 3 domain(s)" in out and "skipped 0 invalid" in out
+    assert results["utf8"] == ["paypa1.com", "paypal.xyz"]            # first domain not dropped
+    assert all(found == results["utf8"] for found in results.values())
+    # keyword and trusted files get the same treatment
+    keywords = write(files["tmp"], "kw16.txt", ("paypal" + chr(10)).encode("utf-16"))
+    trusted = write(files["tmp"], "tr16.txt", ("paypal.xyz" + chr(10)).encode("utf-16"))
+    domains = write(files["tmp"], "d.txt", text)
+    code, out, _ = run(["--keywords", str(keywords), "--trusted", str(trusted), "--domains", str(domains), "--dry-run"], capsys)
+    assert code == 0 and "against 1 keyword(s): 1 finding(s)" in out

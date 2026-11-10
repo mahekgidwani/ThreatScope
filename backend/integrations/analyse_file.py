@@ -61,6 +61,9 @@ def _run(args, client) -> int:
         except IntegrationError as exc:
             print(f"{label}: failed - {exc}", file=sys.stderr)
             failures += 1
+        except Exception as exc:  # noqa: BLE001 - one unparseable file must not abort the batch
+            print(f"{label}: analysis failed - {type(exc).__name__}", file=sys.stderr)   # type only: a message may hold content
+            failures += 1
         else:
             markers = len(event["metadata"]["review_markers"])
             verb = "stored as" if result.created else "already recorded as"

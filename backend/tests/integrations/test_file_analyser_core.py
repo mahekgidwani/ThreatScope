@@ -5,8 +5,9 @@ import time
 
 import pytest
 
+from app.schemas.event import EventIn
 from integrations.file_analyser import (
-    MAX_DOMAINS, MAX_IPS, MAX_URLS, FileAnalysisError, analyse_file, extract_indicators,
+    MAX_DOMAINS, MAX_IPS, MAX_URLS, FileAnalysisError, analyse_file, build_event, extract_indicators,
 )
 from tests.integrations.samples import make_jpeg, make_pdf, make_png, write
 
@@ -252,6 +253,16 @@ def test_unicode_domain_is_stored_as_punycode_or_skipped():
     found = extract_indicators("see http://münchen.example.org/ and ｅｘａｍｐｌｅ.com")
     for domain in found["domains"]:
         assert domain.isascii()
+
+
+def test_urls_with_control_characters_are_dropped(tmp_path):
+    text = "ok http://x.com/fine bad http://x.com/a\x00b esc http://x.com/a\x1bb bell http://x.com/a\x07b del http://x.com/a\x7fb"
+    assert extract_indicators(text)["urls"] == ["http://x.com/fine"]
+    assert extract_indicators("", extra_urls=["http://x.com/\x00", "http://x.com/\x1b[0m"])["urls"] == []
+    pdf = make_pdf(b"<< /URI (http://x.com/\x00) >> << /URI (http://x.com/ok) >>")
+    report = analyse_file(write(tmp_path, "a.pdf", pdf))
+    assert report.indicators["urls"] == ["http://x.com/ok"]
+    EventIn.model_validate(json.loads(json.dumps(build_event(report), default=str)))   # the API accepts it
 
 
 def test_extra_urls_are_included():

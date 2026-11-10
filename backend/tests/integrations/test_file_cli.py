@@ -1,5 +1,6 @@
 """The command-line tool: analyse paths, submit through the shared client, report plainly."""
 import json
+import lzma
 
 import httpx
 import pytest
@@ -98,6 +99,24 @@ def test_problem_files_are_reported_and_the_rest_still_processed(tmp_path, capsy
     assert "good.txt" in out and "stored" in out
     for word in ("empty", "too large", "not found", "not a file"):
         assert word in err.lower()
+
+
+def test_one_bad_file_does_not_stop_the_batch(tmp_path, capsys, monkeypatch):
+    from integrations import analyse_file as cli
+    real = cli.analyse_file
+    bad, good = write(tmp_path, "bad.docx", "SECRET-IN-MESSAGE"), write(tmp_path, "good.txt", "hello")
+
+    def flaky(path, **kwargs):
+        if str(path) == str(bad):
+            raise lzma.LZMAError("SECRET-IN-MESSAGE")
+        return real(path, **kwargs)
+
+    monkeypatch.setattr(cli, "analyse_file", flaky)
+    code, out, err = run([str(bad), str(good)], capsys, client=fake_client(created))
+    assert code == 1
+    assert "good.txt" in out and "stored" in out
+    assert "bad.docx: analysis failed - LZMAError" in err
+    assert "SECRET-IN-MESSAGE" not in err and "Traceback" not in err
 
 
 def test_api_rejection_is_reported_and_exit_code_is_1(tmp_path, capsys):

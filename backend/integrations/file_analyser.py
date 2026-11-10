@@ -109,8 +109,8 @@ def printable(text: str, limit: int = MAX_NAME_LENGTH) -> str:
 def _clean_url(raw: str) -> str | None:
     """scheme://host[:port]/path - without credentials, query string or fragment, which may hold secrets."""
     url = raw.rstrip(".,;:!?'\")]}>")
-    if len(url) > MAX_URL_LENGTH or not url.isascii():
-        return None
+    if len(url) > MAX_URL_LENGTH or not url.isascii() or any(ord(c) < 0x21 or ord(c) == 0x7F for c in url):
+        return None   # control characters: the API rejects NUL, and ESC would reach the dashboard
     try:
         parts = urlsplit(url)
         host, port = parts.hostname, parts.port
