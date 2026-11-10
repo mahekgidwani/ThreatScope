@@ -156,3 +156,25 @@ def test_trend_counts_every_event_exactly_once():
     events = parsed(*[event(n, severity=("low", "high", "info")[n % 3], at=T0 + timedelta(minutes=37 * n)) for n in range(1, 60)])
     trend = ov.build_trend(events, NOW)
     assert sum(sum(v) for v in trend.series.values()) == 59
+
+
+# ---- far-dated events (the backend accepts any timezone-aware timestamp) -----------------------------
+
+@pytest.mark.parametrize("year", [1900, 1970, 9999])
+def test_build_trend_survives_year_1900_1970_and_9999(year):
+    events = parsed(event(1, at=NOW), event(2, at=datetime(year, 6, 1, tzinfo=timezone.utc)))
+    trend = ov.build_trend(events, NOW)
+    assert trend.outside_range == 1
+    assert len(trend.starts) <= ov.MAX_TREND_BUCKETS
+    assert sum(sum(v) for v in trend.series.values()) == 1
+
+
+def test_build_trend_all_events_outside_window_returns_none():
+    assert ov.build_trend(parsed(event(1, at=datetime(1900, 1, 1, tzinfo=timezone.utc))), NOW) is None
+
+
+@pytest.mark.parametrize("step", ov.TREND_STEPS)
+def test_floor_matches_old_behaviour_for_normal_dates(step):
+    moment = datetime(2026, 11, 7, 13, 47, 12, 345, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+    seconds = int(step.total_seconds())
+    assert ov._floor(moment, step) == datetime.fromtimestamp(int(moment.timestamp()) // seconds * seconds, tz=timezone.utc)

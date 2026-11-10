@@ -93,3 +93,9 @@ def test_score_is_always_next_to_the_experimental_label_in_the_overview_notes():
 
 def test_loading_skeletons_carry_no_inline_style():
     assert "style=" not in c.kpi_skeletons() and c.kpi_skeletons(3).count("ts-skeleton") == 3
+
+
+def test_times_far_outside_the_usual_range_format_without_raising():
+    assert c.fmt_time(datetime(1, 1, 1, tzinfo=timezone.utc)).endswith("UTC")
+    assert "9999" in c.fmt_time(datetime(9999, 6, 1, tzinfo=timezone.utc))
+    assert c.fmt_time_short(datetime(1, 1, 1, tzinfo=timezone.utc)).endswith(":00")

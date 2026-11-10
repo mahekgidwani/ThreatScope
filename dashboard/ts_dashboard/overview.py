@@ -19,6 +19,8 @@ TOP_INDICATORS = 8
 HIGH_RISK_SEVERITIES = ("critical", "high")
 TREND_STEPS = (timedelta(hours=1), timedelta(hours=6), timedelta(days=1), timedelta(days=7), timedelta(days=30))
 MAX_TREND_BUCKETS = 60
+TREND_WINDOW = TREND_STEPS[-1] * 120     # about 10 years; older events are left off the chart, not stretched over it
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,7 @@ class Trend:
     starts: list[datetime]
     step: timedelta
     series: dict[str, list[int]]
+    outside_range: int = 0      # events too old or too far in the future to chart
 
 
 @dataclass(frozen=True)
@@ -92,13 +95,16 @@ def top_indicators(indicators: list[Indicator], limit: int = TOP_INDICATORS) -> 
 
 
 def _floor(moment: datetime, step: timedelta) -> datetime:
-    seconds = int(step.total_seconds())
-    return datetime.fromtimestamp(int(moment.timestamp()) // seconds * seconds, tz=timezone.utc)
+    # timedelta arithmetic, not fromtimestamp(): that raises OSError on Windows for years outside 1970-3000
+    return _EPOCH + (moment - _EPOCH) // step * step
 
 
 def build_trend(events: list[Event], now: datetime) -> Trend | None:
-    """Bucket `events` by occurrence time. None when there are no events. The bucket size is the smallest
-    step that keeps the chart under MAX_TREND_BUCKETS bars; empty buckets are kept so gaps are visible."""
+    """Bucket `events` by occurrence time. None when no event is within TREND_WINDOW of `now`. The bucket size is
+    the smallest step that keeps the chart under MAX_TREND_BUCKETS bars; empty buckets are kept so gaps are visible.
+    Events outside the window are not charted; they are counted in `outside_range`."""
+    all_events = events
+    events = [e for e in all_events if now - TREND_WINDOW <= e.occurred_at <= now + TREND_STEPS[-1]]
     if not events:
         return None
     first = min(e.occurred_at for e in events)
@@ -114,4 +120,4 @@ def build_trend(events: list[Event], now: datetime) -> Trend | None:
     series = {sev: [0] * len(starts) for sev in SEVERITIES}
     for event in events:
         series[event.severity][index[_floor(event.occurred_at, step)]] += 1
-    return Trend(starts=starts, step=step, series=series)
+    return Trend(starts=starts, step=step, series=series, outside_range=len(all_events) - len(events))

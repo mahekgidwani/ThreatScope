@@ -47,6 +47,9 @@ def _charts(data: Overview) -> None:
                 sub += f" · newest {data.trend_events_used:,} of {data.total_events:,} events"
             st.markdown(components.panel_heading("Events over time", sub), unsafe_allow_html=True)
             st.plotly_chart(charts.trend_figure(data.trend), use_container_width=True, config=charts.CHART_CONFIG, theme=None)
+            if data.trend.outside_range:
+                st.markdown(components.note(f"{data.trend.outside_range:,} event(s) have a time outside the chart range and are not plotted."),
+                            unsafe_allow_html=True)
     for column, key, title, sub, figure, counts in (
             (mid, "panel-severity", "Events by severity", "All stored events", charts.severity_figure, data.by_severity),
             (narrow, "panel-source", "Events by source", "All stored events", charts.source_figure, data.by_source)):

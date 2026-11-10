@@ -1,4 +1,5 @@
 """The Indicators and Correlation pages, run for real with Streamlit AppTest against a fake API."""
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -128,3 +129,17 @@ def test_correlation_empty_states(monkeypatch):
 def test_correlation_backend_down(monkeypatch):
     at = run(monkeypatch, FakeBackend(events=[event(1, description="MUST NOT APPEAR")], down=True), "correlation")
     assert not at.exception and "Correlation data is unavailable" in text(at) and "MUST NOT APPEAR" not in text(at)
+
+
+def test_far_dated_indicator_and_event_do_not_break_indicators_or_correlation(monkeypatch):
+    far = datetime(9999, 6, 1, tzinfo=timezone.utc)
+    ind = indicator(1, "ip", "203.0.113.42", sightings=3, last=far)
+    events = [event(1, source="honeypot", source_ip="203.0.113.42", indicators=[ind]),
+              event(2, source="domain", at=far, source_ip="203.0.113.42", indicators=[ind])]
+    for page in ("indicators", "correlation"):
+        at = run(monkeypatch, FakeBackend(events=events, indicators=[ind]), page)
+        assert not at.exception, page
+        assert "203.0.113.42" in text(at), page
+    at = run(monkeypatch, FakeBackend(events=events, indicators=[ind]), "indicators")
+    select(at, "Inspect an indicator").select(1).run()
+    assert not at.exception

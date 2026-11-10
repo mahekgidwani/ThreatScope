@@ -1,4 +1,5 @@
 """The Events page, run for real with Streamlit AppTest against a fake API."""
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -160,3 +161,9 @@ def test_backend_down_shows_error_not_events(monkeypatch):
     at = run(monkeypatch, FakeBackend(events=[event(1, description="MUST NOT APPEAR")], down=True))
     assert not at.exception and "Events are unavailable" in text(at) and rows(at) == 0
     assert "MUST NOT APPEAR" not in text(at)
+
+
+def test_a_far_dated_event_does_not_break_the_page(monkeypatch):
+    at = run(monkeypatch, FakeBackend(events=[event(1), event(2, at=datetime(9999, 6, 1, tzinfo=timezone.utc))]))
+    assert not at.exception
+    assert "9999" in text(at)

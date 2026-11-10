@@ -1,4 +1,5 @@
 """Run the real Streamlit app (app.py) headlessly against a fake backend, via Streamlit's AppTest."""
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -93,3 +94,11 @@ def test_no_secret_or_api_key_in_the_rendered_page(monkeypatch):
     monkeypatch.setenv("INGEST_API_KEY", "0123456789abcdefSECRETKEY")
     at = run(monkeypatch, FakeBackend(events=[event(1)]))
     assert "SECRETKEY" not in html(at) and "SECRETKEY" not in repr(at)
+
+
+def test_overview_with_far_dated_events_renders_and_says_they_are_left_out_of_the_chart(monkeypatch):
+    far = [event(2, at=datetime(9999, 6, 1, tzinfo=timezone.utc)), event(3, at=datetime(1900, 1, 1, tzinfo=timezone.utc))]
+    at = run(monkeypatch, FakeBackend(events=[event(1), *far]))
+    assert not at.exception
+    assert "outside the chart range" in html(at)
+    assert len(at.get("plotly_chart")) == 3
