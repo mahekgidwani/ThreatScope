@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_api_key
@@ -14,6 +14,9 @@ from app.services.incident_service import (
 from app.services.paging import DEFAULT_LIMIT, MAX_LIMIT, MAX_OFFSET
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
+
+# The id column is a 4-byte integer: a larger value would be a database error (500), not a 404.
+IncidentId = Path(ge=1, le=2_147_483_647)
 
 
 @router.get("", response_model=Page[IncidentOut], summary="List incidents, newest first")
@@ -35,7 +38,7 @@ def _detail(db: Session, incident: Incident) -> IncidentDetailOut:
 
 
 @router.get("/{incident_id}", response_model=IncidentDetailOut, summary="One incident with its events")
-def get_one_incident(incident_id: int, db: Session = Depends(get_db)):
+def get_one_incident(incident_id: int = IncidentId, db: Session = Depends(get_db)):
     return _detail(db, get_incident(db, incident_id))
 
 
@@ -47,5 +50,5 @@ def post_incident(data: IncidentIn, db: Session = Depends(get_db)):
 
 @router.patch("/{incident_id}", response_model=IncidentDetailOut, dependencies=[Depends(require_api_key)],
               summary="Change an incident's status, title, notes or events (needs the X-API-Key header)")
-def patch_incident(incident_id: int, data: IncidentPatch, db: Session = Depends(get_db)):
+def patch_incident(data: IncidentPatch, incident_id: int = IncidentId, db: Session = Depends(get_db)):
     return _detail(db, update_incident(db, incident_id, data))

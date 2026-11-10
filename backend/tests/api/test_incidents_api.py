@@ -218,3 +218,20 @@ def test_openapi_lists_the_new_operations(client):
     paths = client.get("/openapi.json").json()["paths"]
     assert {"get"} == set(paths[f"{INCIDENTS}/{{incident_id}}"]) - {"patch"}
     assert "post" in paths[INCIDENTS] and "patch" in paths[f"{INCIDENTS}/{{incident_id}}"]
+
+
+# ---- id range ----------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("incident_id", [2_147_483_648, 99_999_999_999, 0, -1])
+def test_incident_id_outside_int4_is_rejected_not_a_500(client, incident_id):
+    url = f"{INCIDENTS}/{incident_id}"
+    assert error_code(client.get(url)) == "validation_error"
+    assert client.get(url).status_code == 422
+    patched = client.patch(url, json={"status": "closed"}, headers=AUTH)
+    assert patched.status_code == 422 and error_code(patched) == "validation_error"
+
+
+def test_largest_int4_incident_id_that_does_not_exist_is_404(client):
+    url = f"{INCIDENTS}/2147483647"
+    assert client.get(url).status_code == 404
+    assert client.patch(url, json={"status": "closed"}, headers=AUTH).status_code == 404
