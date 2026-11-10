@@ -10,21 +10,25 @@ Dashboard (Streamlit, Windows host, 127.0.0.1:8501) -> ts_dashboard.api_client -
 ## Run it
 
 ```powershell
-Set-Location F:\ThreaScope
+Set-Location path\to\ThreaScope
 docker compose up -d                       # PostgreSQL + API (already running if you did Phase 2/3)
-pip install -r dashboard\requirements.txt  # once: streamlit, plotly, httpx, pydantic (host Python)
-Set-Location dashboard
-streamlit run app.py                       # http://127.0.0.1:8501  (open the root URL, not /events)
+Set-Location dashboard                     # run from here: the app loads its assets by relative path
+python -m venv .venv                       # Python 3.11 or newer (3.12 recommended)
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt            # once: streamlit, plotly, httpx, pydantic, pydantic-settings
+streamlit run app.py --server.address 127.0.0.1   # http://127.0.0.1:8501  (open the root URL, not /events)
 ```
 
 Optional configuration (environment or `.env`, same names the adapters use): `THREATSCOPE_API_URL` (default `http://127.0.0.1:8000`),
 `THREATSCOPE_TIMEOUT_SECONDS` (default 10), and `INGEST_API_KEY` (turns on incident editing; without it the dashboard is read-only).
+The key is picked up from `.env` (in `dashboard/` or the project root) automatically. To force read-only, set `INGEST_API_KEY=`
+(empty) in the environment: an environment value wins over `.env`, and an empty one means no key.
 
 ## Tests
 
 | Command | What it runs |
 |---|---|
-| `cd dashboard; python -m pytest -q` | all mocked tests on the host (fake API, Streamlit AppTest) |
+| `cd dashboard; pip install -r requirements-dev.txt` (once), then `python -m pytest -q` | all mocked tests on the host (fake API, Streamlit AppTest); the 10 `live` tests are left out |
 | `docker compose run --rm --no-deps -v "${PWD}\dashboard:/dash" -w /dash backend pytest -q --ignore=tests/ui` | the Streamlit-free tests on Python 3.12 in the existing backend image |
 | `cd dashboard; python -m pytest -q -m live` | **integration**: dashboard code against the real running API and PostgreSQL (read-only; fails, never skips, if the backend is down) |
 | `docker compose run --rm backend pytest -q` | Phase 2, Phase 3 and the new incident API tests, SQLite and PostgreSQL |
@@ -72,7 +76,7 @@ dashboard/
 | `GET /health` | no | 200 ready, 503 database down (both have a body) |
 | `GET /api/v1/events` | no | `source`, `event_type`, `severity`, `source_ip`, `domain`, `start_time`, `end_time`, `limit` (1-100), `offset` |
 | `GET /api/v1/events/{id}` | no | UUID |
-| `GET /api/v1/indicators` | no | `type`, `value`, `limit`, `offset` |
+| `GET /api/v1/indicators` | no | `type`, `value` (exact; normalised first for types `ip` and `domain`, invalid text is a 422), `limit`, `offset` |
 | `GET /api/v1/incidents`, `GET /api/v1/incidents/{id}` | no | `status`, `limit`, `offset` / the incident with its events |
 | `POST /api/v1/incidents`, `PATCH /api/v1/incidents/{id}` | key | added in Phase 4 Task 5 (backend extension, below) |
 
@@ -96,7 +100,8 @@ dashboard/
 - Streamlit strips inline `style` attributes from markdown HTML, so colours are CSS classes (`sev-high`, ...).
 - All event text is HTML-escaped before it reaches the page (`components.py`, tested with hostile input).
 - Overview numbers: totals, per-severity and per-source counts are exact (`total` of `limit=1` queries). The trend and recent lists use the newest 500
-  events and the page says so when that is fewer than all events. "Recurring" = sighting count above 1, among the 300 most recently seen indicators.
+  events and the page says so when that is fewer than all events. Events dated more than about 10 years back or more than 30 days ahead are left off
+  the trend chart; the page shows a note with their count. "Recurring" = sighting count above 1, among the 300 most recently seen indicators.
 - Tests: `tests/fake_backend.py` is an in-memory API with the real filter, order and paging rules; `tests/ui/` runs the real app with Streamlit AppTest and needs the host
   packages (streamlit, plotly). The rest also runs on Python 3.12 in the backend image with `--ignore=tests/ui`.
 
@@ -115,7 +120,7 @@ dashboard/
 
 ## Task 4: Indicator Explorer and Correlation (no backend change)
 
-- **Indicators**: filter by type and exact value; sort by most recently seen (the API order), most sightings, or newest first seen. The last two are not API orders,
+- **Indicators**: filter by type and value (exact; for types `ip` and `domain` the API normalises the value first, like the event filters); sort by most recently seen (the API order), most sightings, or newest first seen. The last two are not API orders,
   so they read up to 1,000 indicators and sort here; the page says so when there are more. Selecting an indicator shows its fields and the events that mention it.
   The page states that an indicator is an observation, not a verdict.
 - **Correlation** reads the newest 1,000 events once (every event already carries its extracted indicators) and groups them: an indicator in 2+ events is a
@@ -135,7 +140,7 @@ detail and write endpoints, and the database already had the tables (`incidents`
 
 | Endpoint | Auth | Does |
 |---|---|---|
-| `GET /api/v1/incidents/{id}` | none | the incident plus its events (newest first, with indicators); 404 if unknown |
+| `GET /api/v1/incidents/{id}` | none | the incident plus its events (newest first, with indicators); 404 if unknown; 422 for an id outside 1..2147483647 (the same for `PATCH`) |
 | `POST /api/v1/incidents` | key | `{title, summary?, event_ids[1..100]}` creates an `open` incident; unknown event = 404, nothing created |
 | `PATCH /api/v1/incidents/{id}` | key | any of `status`, `title`, `summary` (empty clears), `add_event_ids`, `remove_event_ids`; an incident keeps at least one event |
 

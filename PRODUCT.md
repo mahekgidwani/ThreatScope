@@ -23,7 +23,7 @@ Backend and PostgreSQL run in Docker Desktop on Windows; the dashboard runs besi
 
 ## Capabilities and Constraints
 - Dashboard talks to the API only; it never touches PostgreSQL and never duplicates risk scoring.
-- API reads are open; only event ingestion needs the API key, which the dashboard does not hold.
+- API reads are open. Event ingestion and incident writes need the API key. The dashboard reads `INGEST_API_KEY` (if set) only to create and edit incidents; it never ingests events, and without the key it is read-only.
 - No hardcoded or fabricated data; empty and error states must say so plainly.
 - Findings are leads, not verdicts: an indicator existing does not make it malicious.
 - Incident write operations did not exist in the API at the start of Phase 4 (see docs/DASHBOARD.md).

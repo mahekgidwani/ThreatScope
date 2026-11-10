@@ -1,6 +1,6 @@
 """Data side of the Indicator Explorer.
 
-`GET /api/v1/indicators` filters by type and exact value and returns most recently seen first. "Most sightings
+`GET /api/v1/indicators` filters by type and value (exact; normalised first for ip and domain) and returns most recently seen first. "Most sightings
 first" is not an API order, so that sort reads up to SORT_SCAN indicators and sorts them here (and says so when
 there are more).
 """

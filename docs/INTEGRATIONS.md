@@ -23,7 +23,8 @@ supports `--dry-run` (print the events, send nothing, no API key needed).
 
 1. **Adapters never write to PostgreSQL.** Each one builds an event and calls the API. Validation, indicator extraction,
    risk scoring and storage happen once, in the Phase 2 backend. *Enforced by* `tests/integrations/test_architecture.py`
-   (no database library or backend service imported anywhere in `backend/integrations/`).
+   (no database library or backend service is imported anywhere in `backend/integrations/`; only the shared validators
+   `app.schemas.event` and the logging setup `app.logging_config` are imported from `app`).
 2. **One client, one endpoint.** Only `integrations/client.py` touches the network, and it calls only `POST /api/v1/events`.
 3. **Nothing is executed.** No `subprocess`, `eval`, `exec`, dynamic imports or pickle in the adapters (same test).
 4. **Secrets stay secret.** The API key is a `SecretStr`, goes only into a request header, is scrubbed from server-supplied
@@ -33,7 +34,7 @@ supports `--dry-run` (print the events, send nothing, no API key needed).
    `critical`). Every event says it is a detection or static-analysis result.
 6. **Idempotent.** Each event has a stable `external_event_id` (hash of what identifies it at its source), so re-running an
    adapter over the same input stores nothing twice (the API answers 409 and the adapter reports "already recorded").
-7. **Phase 2 is untouched.** `backend/app/` has no change on the Phase 3 branch (checked with `git diff main..HEAD`). Phase 3 added
+7. **Phase 2 was untouched in Phase 3.** `backend/app/` had no change on the Phase 3 branch (checked with `git diff main..HEAD`; Phases 4 and 5 changed it later, see the DEVLOG). Phase 3 added
    `backend/integrations/`, tests, docs, and three dependencies (`httpx` moved to runtime, `confusable_homoglyphs`, `homoglyphs`).
 
 ## 3. Configuration
@@ -70,7 +71,8 @@ indicator shared by every attack.
 
 **File analyser** (`file_analyser.py`, `file_formats.py`). Standard library only. SHA-256 (streamed), type from content (PDF,
 DOCX, PNG, JPEG, JSON, CSV, TXT/LOG; executables and other zips are identified, not opened), structure metadata, and IPv4s /
-domains / URLs found inside (URLs without credentials or query strings). Severity `info`, or `low` when a review marker exists
+domains / URLs found inside (URLs without credentials or query strings; a URL that contains whitespace or control characters is dropped, not trimmed). A damaged
+archive part is noted as unreadable, and a file that fails is reported while the rest of the batch goes on. Severity `info`, or `low` when a review marker exists
 (PDF JavaScript/OpenAction/Launch/embedded file, DOCX macro/embedded/remote template, data after PNG end, executable header,
 extension mismatch). Limits: 10 MB per file, first 1 MB parsed, zip parts capped at 2 MB, lists capped. Found indicators are
 evidence in `metadata`, not indicator rows (the API builds indicators only from top-level fields).
@@ -78,12 +80,14 @@ evidence in `metadata`, not indicator rows (the API builds indicators only from 
 **openSquat adapter** (`opensquat_detector.py`, `opensquat_adapter.py`). openSquat's Levenshtein, homograph check and decision
 order, returning structured findings. Change that matters: punycode names are decoded before the homograph check (openSquat
 would miss every IDN homograph in its own feed). Severity by edit distance, never above `medium`; `metadata.verified=false`.
+Keyword, feed and trusted-domain files may be UTF-8, UTF-8 with BOM or UTF-16 with BOM (what PowerShell 5.1 writes). **UTF-16 without a BOM is not supported.**
 Modifications are listed in `third_party/NOTICE.md`.
 
 **ModSecurity adapter** (`modsec_parser.py`, `modsec_adapter.py`). One JSON object per line. Category = most severity-weighted
 rule hits (`attack_categories` keeps the rest); evaluation rules (949/959/980) are ignored. Never stored: request/response
 bodies, cookies and other headers, rule `[data]` payloads. Query values of password/token/key/session-like parameters are
-`[redacted]`. `--state` makes reading incremental and rotation-aware; a half-written last line waits for the next run.
+`[redacted]`. `--state` makes reading incremental and rotation-aware; a half-written last line waits for the next run. On a connection
+error, timeout or 5xx the run stops and that line is retried next time; a 422 line is skipped.
 
 ## 6. Running adapters on host files
 
@@ -91,16 +95,16 @@ The adapters run inside the `backend` container; input files must be visible the
 
 ```powershell
 # copy one file in (it is only read)
-docker compose cp F:\samples\invoice.pdf backend:/tmp/invoice.pdf
+docker compose cp path\to\samples\invoice.pdf backend:/tmp/invoice.pdf
 docker compose exec backend python -m integrations.analyse_file /tmp/invoice.pdf --dry-run     # look first
 docker compose exec backend python -m integrations.analyse_file /tmp/invoice.pdf               # then store
 
 # or mount a folder read-only for a one-off run (the API is reached through the compose network)
-docker compose run --rm -v "F:\samples:/samples:ro" -e THREATSCOPE_API_URL=http://backend:8000 backend `
+docker compose run --rm -v "path\to\samples:/samples:ro" -e THREATSCOPE_API_URL=http://backend:8000 backend `
     python -m integrations.modsec_adapter /samples/modsec_audit.log --state /tmp/state.json
 ```
 
-Real runs add events to the **development database** (unlike the tests). Use `--dry-run` to preview. A state file kept
+Real runs add events to the **development database** (unlike the tests), and so does `load-demo.ps1` without `-DryRun`. Use `--dry-run` to preview. A state file kept
 inside a throw-away container is lost with it; mount a folder for it if incremental reading must survive.
 
 ## 7. A short demo (nothing is stored until the last step)
@@ -145,7 +149,7 @@ Commands: `docker compose exec backend pytest -q` (all), `... -m "not postgres"`
 
 Zeek was evaluated (`docs/NETWORK_DECISION.md`). Live capture is impossible here (Docker Desktop cannot see the host network card;
 Zeek's Windows support is experimental). The only honest option was Zeek in offline pcap mode with an adapter over its own
-`notice.log`, conditional on freeing space on a nearly full C: drive, pulling the image and supplying a pcap with a real
+`notice.log`, conditional on freeing space on the nearly full disk that holds Docker's data (on the author's machine), pulling the image and supplying a pcap with a real
 detection. Those approvals were not given, so the decision is **defer**. The `network` source value, API and scoring already
 exist, so adding the adapter later needs no backend change.
 
@@ -158,9 +162,12 @@ exist, so adding the adapter later needs no backend change.
 * Correlation (Phase 4) can already join on shared indicators the API creates: attacker IP across honeypot and future network
   events, file hash across files, domain across domain findings. Values found *inside* files are in `metadata` for later use.
 * Risk scores are experimental and not calibrated (docs/RISK_SCORING.md).
-* Deferred Phase 2 review items (Unix timestamps in list filters, indicator filter normalisation, body parsed before key check
-  and no body-size cap, access logs may show query strings) were **not** needed by any adapter and were not changed. Adapters send
-  small POST bodies without query strings. The body-size cap matters if the API is ever exposed beyond localhost.
+* Deferred Phase 2 review items (Unix timestamps in list filters, body parsed before key check, access logs may show query
+  strings) were **not** needed by any adapter and were not changed in Phase 3. Adapters send small POST bodies without query
+  strings. Two of the deferred items were fixed later, in Phase 5: the indicator `value` filter is now normalised for types `ip` and
+  `domain`, and a request body over 256 KiB gets 413 `payload_too_large`. The cap reads the `Content-Length` header, so a chunked body
+  without one is **not** capped; put a reverse proxy in front if the API is ever exposed beyond localhost.
+* The look-alike command cannot read UTF-16 files without a BOM; the file analyser drops URLs that contain whitespace or control characters.
 
 ## 11. Troubleshooting
 
@@ -173,4 +180,4 @@ exist, so adding the adapter later needs no backend change.
 | `already recorded` | Normal: that event was stored before. |
 | Honeypot adapter reads 0 records on a second run | Normal with `--state`: no new complete lines yet. |
 | Tests error with "PostgreSQL is mandatory ..." | `docker compose up -d db`, then re-run. |
-| `no space left on device`, Docker I/O errors | C: is nearly full (Docker's data file is on it). Free space before pulling or building images. |
+| `no space left on device`, Docker I/O errors | The disk that holds Docker's data is nearly full. Free space before pulling or building images. |

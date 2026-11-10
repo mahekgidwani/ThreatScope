@@ -4,8 +4,8 @@
 stored. It exists to help sort a long list of events so the ones most worth a look come first.
 
 **What it is not.** It is an *experimental prioritisation score*. It is not a probability that a system was
-compromised, not a verdict, and not a replacement for an analyst's judgement. The weights are simple, hand-chosen
-and expected to change after the correlation work in Phase 4.
+compromised, not a verdict, and not a replacement for an analyst's judgement. The weights are simple and hand-chosen.
+Phase 4 (dashboard, correlation and incidents) kept them unchanged.
 
 **Separate from `severity`.** `severity` (info / low / medium / high / critical) is the label the event's source
 gave it. `risk_score` is ThreatScope's own number. Clients cannot send a `risk_score`; the API rejects it.
@@ -35,8 +35,8 @@ Why these parts:
 The event being scored is never counted as one of its own earlier sightings.
 
 "Earlier" means **stored earlier** (ingested before), not "has an earlier `occurred_at`". If an adapter loads old
-logs out of order, an older event can therefore receive a bigger repeat bonus than a newer one. Revisit this when
-correlation arrives in Phase 4.
+logs out of order, an older event can therefore receive a bigger repeat bonus than a newer one. Phase 4 did not change
+this rule.
 
 | Event number for the same indicator | Earlier events | Bonus |
 |---|---|---|
@@ -85,4 +85,4 @@ fires 8 simultaneous events at PostgreSQL).
   later becomes common.
 - Only counts matter; the age of earlier sightings does not.
 - The weights are not calibrated against real data.
-- Phase 4 (correlation and incidents) is expected to refine or replace these rules.
+- Phase 4 added correlation and incidents without a second formula: an incident's risk score is the highest score among its events.

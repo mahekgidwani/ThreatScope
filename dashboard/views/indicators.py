@@ -58,7 +58,7 @@ def render() -> None:
         a, b, c, d = st.columns([2, 4, 2, 1.5], vertical_alignment="bottom")
         indicator_type = a.selectbox("Type", [None, *INDICATOR_TYPES], key="ix_type",
                                      format_func=lambda v: "Any type" if v is None else INDICATOR_LABELS[v])
-        value = b.text_input("Value (exact match)", key="ix_value", placeholder="IP, domain, URL or SHA-256")
+        value = b.text_input("Value (exact; IP and domain are normalised)", key="ix_value", placeholder="IP, domain, URL or SHA-256")
         sort = c.selectbox("Sort", SORTS, key="ix_sort")
         size = d.selectbox("Rows per page", PAGE_SIZES, index=1, key="ix_size")
         st.button("Clear filters", icon=":material/filter_alt_off:", on_click=_clear)

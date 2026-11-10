@@ -51,8 +51,8 @@ Fixed (one pass, tests written first - 87 new tests failed before the fix, all p
 Corrected in the docs only: the claim "no query strings in logs" (uvicorn's own access line still prints them) and
 `RISK_SCORING.md` ("earlier" means stored earlier, not earlier `occurred_at`).
 Deferred minors (not fixed on purpose): list filters `start_time`/`end_time` still accept Unix numbers (ingestion refuses
-them); the indicator `value` filter is not normalised like the event `domain` filter (filter by the stored punycode/canonical
-form); a request body is parsed before the API-key check and there is no body-size cap (localhost only); uvicorn's access
+them); the indicator `value` filter was not normalised like the event `domain` filter (fixed in Phase 5 for types `ip` and `domain`); a request body is parsed before the API-key check and there was no body-size cap at that time (localhost only; Phase 5 added a 256 KiB
+cap for requests that send a Content-Length, chunked bodies are still uncapped); uvicorn's access
 log prints query strings (`--no-access-log` would silence it).
 Not changed (reviewer's question): `POSTGRES_PASSWORD` may still be `change-me`; the spec only requires placeholder rejection for
 the API key and the database is bound to localhost.
@@ -229,7 +229,8 @@ print as `**********` everywhere; error messages never contain the secret (`hide
 Database URL: `URL.create(...)` keeps user, password, host and database as separate values, so characters like
 `@ : / ? # %` and spaces in a password are escaped correctly. `safe_database_url` shows `***` instead of the password.
 What `logging_config.py` does: one stderr handler, format `time LEVEL logger message`. You can pass known secrets;
-any appearance in a message, its arguments or a traceback is replaced by `***`. SQLAlchemy's own SQL logging is
+any appearance in a message, its arguments or a traceback is replaced by `***`. The handler sits on the root logger and
+matches only the exact secret strings it was given, so uvicorn's own loggers (its access log) are outside it. SQLAlchemy's own SQL logging is
 forced to WARNING so SQL parameters never reach the logs. Calling it twice does not duplicate lines.
 Tests: `docker compose run --rm --no-deps backend pytest -q` -> 52 passed. `conftest.py` always replaces the API key with a
 random fake one, so tests never use the real key.
@@ -270,7 +271,7 @@ standard library (`hashlib`, `zipfile`, `struct`, `re`, `json`, `csv`) plus the 
 library (pypdf, python-docx, Pillow, python-magic) was judged not worth the install weight and attack surface for an MVP.
 Use (no public upload endpoint; this is a local command):
 `docker compose exec backend python -m integrations.analyse_file /path/in/container [--dry-run] [--max-bytes N]`.
-To analyse a host file: `docker compose run --rm -v "F:\folder:/samples:ro" -e THREATSCOPE_API_URL=http://backend:8000 backend
+To analyse a host file: `docker compose run --rm -v "path\to\folder:/samples:ro" -e THREATSCOPE_API_URL=http://backend:8000 backend
 python -m integrations.analyse_file /samples/file.pdf`. `--dry-run` prints the event and needs no API key.
 What it records (event `source=file`, `event_type=file_analysis`): SHA-256 as `file_hash`, size, detected type (from
 CONTENT, not the extension; a mismatch is a finding), structure (PDF version/encrypted flag, DOCX macro/embedded/external
@@ -358,8 +359,8 @@ headers (the bait `Set-Cookie`), and the `[data "..."]` part of rule messages. N
 Duplicates and incremental reading: `external_event_id = modsec:<hash(transaction_id)>` (fallback: time + IP + request line), so
 re-reading the log is harmless. With `--state` the tool saves `{offset, head_length, head_hash}` (no secrets) after each run: only
 new complete lines are read; a half-written last line waits for the next run; a different or shorter file (rotation) is read from
-the start; corrupt state means start from the beginning. If the API is down or the key is wrong the run stops and the failing line
-is retried next time; events the API rejects (422) are counted and skipped so one bad record cannot block the log.
+the start; corrupt state means start from the beginning. If the API is down or unreachable, a request times out, the API answers with a
+5xx error, or the key is wrong, the run stops and the failing line is retried next time (before Phase 5 a 5xx answer did not stop the run, so that line was lost); events the API rejects (422) are counted and skipped so one bad record cannot block the log.
 Hostile input: over-long lines (> 1 MB) are skipped unread, invalid UTF-8 is replaced, deeply nested JSON is just an invalid line,
 messages are capped (200 per record, 20,000 characters each, bounded regexes), a crash inside the parser is contained per line.
 Limits: only the JSON audit format; no `--follow` mode (run it from a scheduler); a rule message whose quotes are NOT escaped by
@@ -371,7 +372,7 @@ no payload outside the 100-char query preview. Dev database untouched.
 
 ### Task 5 - Zeek evaluation and network decision (done: decision recorded, nothing installed)
 File: `docs/NETWORK_DECISION.md` (full evidence and tables). No code, no Docker change, no image pulled.
-Measured: Docker Desktop on WSL2 (8.2 GB VM, 12 CPUs); **C: has about 1.6 GB free and Docker's 25.7 GB data file is on C:**; no
+Measured on the author's machine at the time: Docker Desktop on WSL2 (8.2 GB VM, 12 CPUs); **C: had about 1.6 GB free and Docker's 25.7 GB data file was on C:**; no
 Wireshark/tshark; `pktmon` and Npcap exist. From Zeek's docs: Windows support is experimental and tested on pcap files, not live
 capture; the official `zeek/zeek` image is 165 MB compressed (registry manifest, no pull) and does not run Zeek by itself;
 `zeek -r file.pcap LogAscii::use_json=T` writes JSON logs; detections are notices (`notice.log`), scan detection is a policy script.
@@ -407,3 +408,70 @@ Branch `phase3/integrations`. Commits: shared client (a0dfa6b), file analyser (5
 adapter (cb72f0a), Zeek evaluation (9dfdaba), end-to-end tests and documentation (Task 6). New dependencies: `httpx` (moved to
 runtime), `confusable_homoglyphs`, `homoglyphs` (MIT, from openSquat). No change to `backend/app/`. Deferred Phase 2 review items
 were not needed by any adapter and were not changed.
+
+## Phase 4 - Dashboard and incident management
+Branch `phase4/dashboard`. The full description (pages, rules, endpoints, limits, per-task notes) is in [DASHBOARD.md](DASHBOARD.md).
+What was built: a Streamlit dashboard on the host (`dashboard/`) with Overview, Events, Indicators, Correlation, Incidents, Reports and
+System status pages. It talks to the backend over HTTP only and never to PostgreSQL.
+Why it is built like that: the dashboard code that does not draw anything (`dashboard/ts_dashboard/`) has no Streamlit import, so it can be
+tested without a browser; only `dashboard/views/` imports Streamlit. A test checks that the dashboard imports no backend or database code.
+Backend extension (the only backend change in Phase 4): the incident API. `GET /api/v1/incidents/{id}`, `POST /api/v1/incidents` and
+`PATCH /api/v1/incidents/{id}` (writes need the API key). No schema change: the tables `incidents` and `incident_events` already existed.
+An incident's severity and risk score are not sent by clients; they are the highest values among its events. Notes live in the existing
+`summary` column. 78 new tests, on SQLite and PostgreSQL.
+Other choices: correlation groups the newest 1,000 events inside the dashboard instead of adding an indicator filter to the API (the page says "searched the newest N of M");
+the API key is optional in the dashboard and used only for incident writes; the risk-score weights were kept (see [RISK_SCORING.md](RISK_SCORING.md));
+Streamlit's canvas data grid was tried and dropped for an HTML table so severity badges and fonts render the same everywhere.
+Tests at the end of Phase 4: backend 1225 passed (1147 from Phase 3 + 78 incident tests); the dashboard has its own suite (fake API, Streamlit
+AppTest) and 10 `live` tests that need the running stack. The totals after Phase 5 are in the Phase 5 section below.
+
+## Phase 5 - Review and fixes
+Branch `phase5/review-fixes` (from `phase4/dashboard`). Plan: `superpowers/plans/2026-11-10-threatscope-phase5-review-fixes.md`.
+An independent review of the finished project (backend, adapters, dashboard, documentation) found defects. Each fix was done test first
+(the test failed before the fix), then reviewed by a second agent before it was accepted.
+
+What the review found and what was fixed:
+- **Dashboard.** Relative time presets ("Last 24 hours") moved on every rerun, so "Next page" jumped back to page 1 and a prepared CSV was
+  marked out of date: they now start on a stable 5-minute bucket. One event with a far-dated time crashed the Overview trend: times outside the window (about 10 years back, 30 days ahead) are left
+  off the chart and a note says how many. Credentials inside URLs (`http://user:pw@host`) showed in tables, event details, Markdown reports and
+  graph labels: they are hidden now. After "Create incident" the form kept its values, so a second click made a duplicate: the form is cleared and
+  the button stays off while the same event ids are selected again. The KPI "High risk events" is now "High severity events" (it counts severity, not score),
+  and a share below 0.5% shows "<1%" instead of "0%".
+- **Adapters.** The ModSecurity adapter counted a 5xx answer as a failed line and moved on, so that log line was never retried: it now stops and retries it
+  next time, also after a timeout or connection error (a 422 line is still skipped). The file analyser kept URLs that contained control characters (the API
+  rejects NUL and an ESC would reach the dashboard): such URLs are now dropped. A corrupt LZMA archive made the analyser crash: it is now noted as an unreadable
+  part, and one failing file no longer stops a batch. The look-alike command lost the first entry of a UTF-8 BOM list and could not read UTF-16 files with a BOM
+  (what PowerShell 5.1 writes): it now reads UTF-8, UTF-8 BOM and UTF-16 BOM (UTF-16 without BOM is still unsupported).
+- **Demo data.** A fresh clone had no events. `backend/demo/` holds fictional data and `backend/demo/load-demo.ps1` loads it (`-DryRun` previews). It runs
+  the three adapters in one-off containers with `THREATSCOPE_API_URL=http://backend:8000` and **writes to the database when run for real**. Four honeypot
+  events share the attacker IP `203.0.113.50`; the other demo events are evidence only, so that IP is the one shared indicator.
+- **API.** The indicator `value` filter is normalised for types `ip` and `domain` (bad text is a 422 `invalid_filter`). A URL host with an IPv6 scope id
+  no longer creates an `ip` indicator. Incident ids must be 1..2147483647: on PostgreSQL id 2147483648 gave a 500 before (SQLite gave 404); it is a 422 now.
+  Request bodies over 256 KiB (by `Content-Length`) get 413 `payload_too_large`; domain is capped at 512 raw characters, IP fields at 64, incident title at 200
+  and summary at 5000. The access log prints the path with `repr` quoting so control characters cannot forge log lines.
+- **Tests.** A test pins the compose file to loopback-only ports; every read route is tested for a clean 503 with no leak when the database is down; the dashboard
+  tests no longer read the real API key from `.env`.
+- **Documentation.** README prerequisites (Python 3.11+, venv), architecture diagram, dashboard section before Tests, a Known limitations block; this log; NOTICE rows
+  for Streamlit, Plotly, httpx and the OWASP Core Rule Set; "future" wording about Phase 4 changed to past tense in the scoring docs.
+
+Test totals (Phase 5): backend `docker compose run --rm backend pytest -q` **1288 passed** (SQLite and real PostgreSQL, no skips); dashboard
+`cd dashboard; python -m pytest -q` **315 passed**, 10 `live` tests deselected.
+
+### Decision record: items found in the review but not fixed (deferred)
+Context: the Phase 5 goal was to fix what could lose data, crash a page, leak a secret or mislead a reader, and to write the rest down.
+Decision: the items below stay open on purpose. Each is a small, low-risk gap that needs a design choice or more work than it is worth for a local MVP.
+Consequences: they are listed here and, where a reader could be misled, in the README "Known limitations".
+- Dashboard redaction (`ts_dashboard/redact.py`) is pattern based. It misses passwords that contain `/` or `@` and a bare token in a URL
+  (`http://token@host`). CSV cells for `domain`, `source_ip`, `file_hash` and `external_event_id` are not passed through it. (Review item DASH-08.)
+- The Indicators page shows "Indicators are unavailable ... Use Refresh" for a 422 caused by an invalid `ip` or `domain` filter value; the advice is misleading.
+- A click that straddles a 5-minute boundary resets paging once. The "Create" button is disabled without a message when the same event ids were just used;
+  saving an incident edit also clears a half-typed create form. A share of exactly 0.5% shows "0%".
+- The Reports page was not exercised with far-dated events.
+- The openSquat adapter stops on connection errors and timeouts but counts 5xx answers and goes on. Nothing is lost, because a re-run is idempotent, so it was left.
+- The file analyser stores URL hosts in `metadata` with `str(ip_address(host))`, so an IPv6 scope id can still appear there (evidence only, never an indicator).
+  Its "analysis failed" label also covers errors raised while submitting the event.
+- Chunked request bodies without `Content-Length` are not capped (documented shortcut). Two error-handler log lines in `errors.py` print the path with `%s`; they run
+  only on matched routes whose parameters were already validated.
+- The log redactor covers the root logger and exact secret strings only; uvicorn's loggers and its access log (which prints query strings) are outside it.
+- Network monitoring (Zeek) stays deferred (see [NETWORK_DECISION.md](NETWORK_DECISION.md)).
+- Not done: the demo loader was run with `-DryRun` and its data is checked by tests, but it was not run for real against the development database.

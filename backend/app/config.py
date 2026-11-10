@@ -42,7 +42,8 @@ class Settings(BaseSettings):
 
     max_metadata_bytes: int = Field(default=65536, gt=0)
 
-    # Optional full URL; when set it replaces the POSTGRES_* parts. Treated as a secret.
+    # Optional full URL; when set it replaces the connection built from POSTGRES_*, but POSTGRES_USER,
+    # POSTGRES_PASSWORD and POSTGRES_DB are still required above. Treated as a secret.
     database_url: SecretStr | None = None
 
     @field_validator("ingest_api_key")

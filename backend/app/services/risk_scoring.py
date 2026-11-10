@@ -2,7 +2,7 @@
 
 IMPORTANT: this is a simple, rule-based *prioritisation aid* for ordering events. It is not a
 probability of compromise and not a verdict. It is separate from `severity`, which is the
-event source's own label. The weights below are expected to change after Phase 4 tuning.
+event source's own label. Phase 4 kept these weights; an incident takes the highest score of its events.
 
 score = severity points + source points + repeat-indicator bonus, limited to 0..100.
 """

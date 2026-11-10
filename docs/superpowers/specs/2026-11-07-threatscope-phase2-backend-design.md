@@ -96,7 +96,7 @@ Dedupe rule: events with the same (`source`,`external_event_id`) are duplicates 
 | `POST /api/v1/events` | Ingest one event (needs `X-API-Key`). Returns full `EventOut` | 201 · 401 · 409 duplicate · 422 |
 | `GET /api/v1/events` | Paged list, newest first (`occurred_at` desc, `id` desc) | 200 · 422 |
 | `GET /api/v1/events/{id}` | One event incl. its indicators | 200 · 404 · 422 bad UUID |
-| `GET /api/v1/indicators` | Paged; filters `type`, `value` (exact) | 200 · 422 |
+| `GET /api/v1/indicators` | Paged; filters `type`, `value` (exact; since Phase 5 the value is normalised first for types `ip` and `domain`) | 200 · 422 |
 | `GET /api/v1/incidents` | Paged; filter `status` (empty until Phase 4) | 200 · 422 |
 
 Event list query parameters: `source`, `event_type`, `severity`, `source_ip`, `domain`, `start_time`, `end_time`, `limit` (default 50, **max 100**, min 1), `offset` (default 0, ≥ 0). `start_time` is inclusive and `end_time` exclusive, both must be timezone-aware, `start_time > end_time` → 422. All filters are exact matches (no LIKE, so `%` and `_` are plain characters). `domain` filter is normalised the same way as ingest. Response: `{items, total, limit, offset}`.
@@ -113,7 +113,7 @@ Interactive docs at `/docs`.
 | Repeat indicators: +5 per previous sighting of the most-seen indicator on this event, capped at +20 | 0–20 |
 | Total clamped to 0–100 | max 90 in Phase 2 |
 
-Weights are constants in `risk_scoring.py`, documented in `docs/RISK_SCORING.md`, returned as `risk_factors`, and are expected to change after Phase 4 correlation/tuning. Under concurrent ingestion the repeat bonus is best-effort.
+Weights are constants in `risk_scoring.py`, documented in `docs/RISK_SCORING.md`, returned as `risk_factors`, and are expected to change after Phase 4 correlation/tuning. Under concurrent ingestion the repeat bonus is best-effort. **Superseded: the repeat bonus is exact.** The sighting count is raised by one atomic SQL statement and a test fires 8 simultaneous events at PostgreSQL (see `docs/RISK_SCORING.md`).
 
 ### 5.6 Ingestion flow (`event_service.create_event`)
 1. Pydantic validates/normalises. 2. Build `Event` (server `id`, `received_at`). 3. Derive indicators: `source_ip`; `domain`; `url` and the URL's host (if a hostname, as a domain indicator, collapsed with `domain` when equal); `file_hash`; `destination_ip` **only when source is `network`** (for honeypots it is our own address and would falsely correlate everything). 4. Upsert indicators: get-or-create inside a SAVEPOINT (retry select on `IntegrityError`), atomic SQL increment `sighting_count = sighting_count + 1`, update `last_seen`. 5. Compute risk score. 6. Insert event + links in **one transaction**; `IntegrityError` on (`source`,`external_event_id`) → rollback → `DuplicateEventError` (409). 7. Log one line: `id`, source, type, severity, risk_score (never metadata, headers or the key).
