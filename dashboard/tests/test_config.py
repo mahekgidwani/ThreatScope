@@ -68,5 +68,12 @@ def test_a_blank_key_means_read_only(monkeypatch, blank):
     assert DashboardSettings(_env_file=None).ingest_api_key is None
 
 
+def test_suite_never_sees_a_real_api_key():
+    from ts_dashboard.config import load_settings
+    key = load_settings().ingest_api_key
+    has_real_key = key is not None and bool(key.get_secret_value().strip())   # bool only: a failure must not print the key
+    assert not has_real_key, "a real INGEST_API_KEY reached the test process"
+
+
 def test_only_these_settings_exist():
     assert set(DashboardSettings.model_fields) == {"threatscope_api_url", "threatscope_timeout_seconds", "ingest_api_key"}

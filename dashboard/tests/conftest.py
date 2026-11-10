@@ -19,6 +19,12 @@ def make_api(handler) -> tuple[ThreatScopeApi, list[httpx.Request]]:
     return ThreatScopeApi(DashboardSettings(_env_file=None, ingest_api_key=None), http_client=http), seen
 
 
+@pytest.fixture(autouse=True)
+def no_real_api_key(monkeypatch):
+    """Keep the developer's real INGEST_API_KEY (env or .env) out of every test; tests that need a key set their own."""
+    monkeypatch.setenv("INGEST_API_KEY", "")
+
+
 @pytest.fixture
 def api_for():
     return make_api
