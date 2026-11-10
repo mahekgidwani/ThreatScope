@@ -113,3 +113,12 @@ def test_no_incidents_means_no_incident_download(monkeypatch):
 def test_backend_down(monkeypatch):
     at = run(monkeypatch, FakeBackend(events=[event(1, description="MUST NOT APPEAR")], down=True))
     assert not at.exception and "The report is unavailable" in text(at) and "MUST NOT APPEAR" not in text(at)
+
+
+def test_credentials_in_an_incident_title_are_hidden_in_the_summary_picker(monkeypatch):
+    title = "look at http://admin:" + "p" * 70 + "@evil.test/x"      # the cut at 70 falls inside the password
+    events = [event(1, severity="critical")]
+    at = run(monkeypatch, FakeBackend(events=events, incidents=[incident(1, "open", "critical", (events[0]["id"],), title=title)]))
+    assert not at.exception
+    options = "\n".join(o for s in at.selectbox if s.label == "Investigation summary for an incident" for o in s.options)
+    assert "[redacted]" in options and "admin:" not in options and "ppppp" not in options

@@ -213,7 +213,7 @@ def render() -> None:
                        args=(1,), key="ic_next", use_container_width=True)
             by_id = {i.id: i for i in result.items}
             st.selectbox("Inspect an incident", [None, *by_id], key="ic_pick", on_change=_pick_changed,
-                         format_func=lambda v: "Choose an incident on this page…" if v is None else f"#{v} · {by_id[v].title[:70]}")
+                         format_func=lambda v: "Choose an incident on this page…" if v is None else f"#{v} · {redact(by_id[v].title)[:70]}")
 
     focus = st.session_state.get("ic_focus")
     if focus:

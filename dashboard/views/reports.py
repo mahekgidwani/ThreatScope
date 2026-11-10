@@ -7,6 +7,7 @@ from ts_dashboard import charts, components
 from ts_dashboard.api_client import ApiError, ThreatScopeApi
 from ts_dashboard.events import CUSTOM_RANGE, RANGE_PRESETS, EventFilters, time_range
 from ts_dashboard.models import SEVERITIES, SOURCES
+from ts_dashboard.redact import redact
 from ts_dashboard.reports import (
     EXPORT_MAX, build_report, describe_scope, events_to_csv, fetch_export, incident_markdown, report_markdown,
 )
@@ -87,7 +88,7 @@ def _incident_summary(api: ThreatScopeApi) -> None:
         return
     by_id = {i.id: i for i in incidents}
     chosen = st.selectbox("Investigation summary for an incident", list(by_id), key="rp_incident",
-                          format_func=lambda v: f"#{v} · {by_id[v].title[:70]} · {by_id[v].status}")
+                          format_func=lambda v: f"#{v} · {redact(by_id[v].title)[:70]} · {by_id[v].status}")
     try:
         detail = api.get_incident(chosen)
     except ApiError as error:

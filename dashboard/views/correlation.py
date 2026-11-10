@@ -5,6 +5,7 @@ from ts_dashboard import charts, components
 from ts_dashboard.api_client import ApiError
 from ts_dashboard.correlation import build_graph, correlate, scan_events
 from ts_dashboard.models import INDICATOR_TYPES
+from ts_dashboard.redact import redact
 from ts_dashboard.theme import INDICATOR_LABELS
 from views.common import page_header, require_api
 
@@ -59,7 +60,7 @@ def render() -> None:
                     unsafe_allow_html=True)
         by_id = {k.indicator.id: k for k in shown}
         picked = st.selectbox("Inspect a shared indicator", list(by_id), key=f"co_pick-{indicator_type}-{minimum}-{cross_only}",
-                              format_func=lambda v: f"{INDICATOR_LABELS[by_id[v].indicator.type]} · {by_id[v].indicator.value[:60]} "
+                              format_func=lambda v: f"{INDICATOR_LABELS[by_id[v].indicator.type]} · {redact(by_id[v].indicator.value)[:60]} "
                                                     f"· {by_id[v].count} events")
     chosen = by_id[picked]
 
@@ -72,7 +73,7 @@ def render() -> None:
             st.markdown(components.note(f"Showing the newest {graph.events_shown} of {graph.events_total} events."), unsafe_allow_html=True)
 
     with st.container(key="panel-co-events"):
-        st.markdown(components.panel_heading(f"Events sharing {chosen.indicator.value[:60]}",
+        st.markdown(components.panel_heading(f"Events sharing {redact(chosen.indicator.value)[:60]}",
                                              f"{chosen.count} events from {len(chosen.sources)} source(s) · risk scores are experimental"),
                     unsafe_allow_html=True)
         st.markdown(components.events_table(chosen.events[:100], with_id=True) + components.note(

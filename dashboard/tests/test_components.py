@@ -149,6 +149,7 @@ def test_credentials_in_urls_are_hidden_everywhere(render):
 
 
 def test_credentials_are_hidden_before_long_values_are_shortened():
-    long_url = "http://admin:hunter2@" + "a" * 40 + ".test/x"
-    html = c.events_table([parsed(url=long_url)])
-    assert "hunter2" not in html and "admin" not in html
+    # the '@' is past every cut limit, so shortening first would leave "admin:ppppp..." behind
+    long_url = "http://admin:" + "p" * 60 + "@host/x"
+    html = c.events_table([parsed(url=long_url)]) + c.high_risk_table([parsed(url=long_url)])
+    assert "admin:" not in html and "ppppp" not in html and "[redacted]" in html

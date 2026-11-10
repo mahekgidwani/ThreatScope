@@ -143,3 +143,13 @@ def test_far_dated_indicator_and_event_do_not_break_indicators_or_correlation(mo
     at = run(monkeypatch, FakeBackend(events=events, indicators=[ind]), "indicators")
     select(at, "Inspect an indicator").select(1).run()
     assert not at.exception
+
+
+def test_credentials_in_a_url_indicator_are_hidden_in_the_correlation_labels_and_heading(monkeypatch):
+    leaky = indicator(9, "url", "http://admin:" + "p" * 60 + "@evil.test/x", sightings=2)      # the cut at 60 falls inside the password
+    events = [event(1, indicators=[leaky]), event(2, indicators=[leaky])]
+    at = run(monkeypatch, FakeBackend(events=events, indicators=[leaky]), "correlation")
+    assert not at.exception
+    shown = text(at) + "\n".join(o for s in at.selectbox for o in s.options)
+    assert "Events sharing" in shown and "[redacted]" in shown
+    assert "admin:" not in shown and "ppppp" not in shown

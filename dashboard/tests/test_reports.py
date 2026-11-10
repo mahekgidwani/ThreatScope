@@ -217,7 +217,7 @@ def test_credentials_in_urls_are_hidden_everywhere(render):
 
 
 def test_credentials_are_hidden_before_the_indicator_is_cut_to_60_characters():
-    long_url = "http://admin:hunter2@" + "a" * 70 + ".test/x"
+    long_url = "http://admin:" + "p" * 60 + "@host/x"      # the '@' is past the cut: shortening first would leave "admin:ppppp..."
     text = rp.incident_markdown(IncidentDetail.model_validate({**incident(1, "open", "high", ()), "event_count": 1,
                                                               "events": [event(1, url=long_url)]}), NOW)
-    assert "hunter2" not in text and "admin" not in text
+    assert "admin:" not in text and "ppppp" not in text and "[redacted]" in text
