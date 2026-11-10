@@ -6,7 +6,7 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from tests.fake_backend import FakeBackend, T0, event, indicator
+from tests.fake_backend import FakeBackend, T0, event, indicator, tick_clock
 
 REAL_CLIENT = httpx.Client      # captured once: patching twice in one test must not stack the fakes
 HARNESS = str(Path(__file__).with_name("harness.py"))
@@ -68,6 +68,17 @@ def test_next_and_previous_page(monkeypatch):
     assert at.button(key="ev_next").disabled is True
     at.button(key="ev_prev").click().run()
     assert "Showing 1–25" in text(at)
+
+
+def test_next_page_survives_a_rerun_with_a_relative_range(monkeypatch):
+    import views.events
+    tick_clock(monkeypatch, views.events)
+    at = run(monkeypatch, backend_with_events(60))          # 3 pages of 25
+    at.selectbox(key="ev_range").select("Last 24 hours").run()
+    assert "Showing 1–25 of 60" in text(at)
+    at.button(key="ev_next").click().run()
+    assert "Showing 26–50 of 60" in text(at) and "page 2 of 3" in text(at)
+    assert at.session_state["ev_page"] == 1
 
 
 def test_filtering_resets_to_page_one_and_narrows(monkeypatch):

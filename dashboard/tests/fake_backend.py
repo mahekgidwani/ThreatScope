@@ -14,6 +14,20 @@ HEALTH_DOWN = {"status": "not_ready", "api": {"status": "up"}, "database": {"sta
 T0 = datetime(2026, 11, 7, 4, 0, tzinfo=timezone.utc)
 
 
+def tick_clock(monkeypatch, *view_modules) -> None:
+    """Make `datetime.now()` in the given view modules start at 12:01:30 UTC on T0's day and advance one second per
+    call, like a real clock between Streamlit reruns. 12:01:30 is more than a minute from any 5-minute boundary."""
+    calls = iter(range(10_000))
+
+    class TickingDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 7, 12, 1, 30, tzinfo=timezone.utc) + timedelta(seconds=next(calls), microseconds=123)
+
+    for module in view_modules:
+        monkeypatch.setattr(module, "datetime", TickingDatetime)
+
+
 def _z(moment: datetime) -> str:
     return moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 

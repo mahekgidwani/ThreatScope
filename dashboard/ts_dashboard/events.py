@@ -21,6 +21,7 @@ TYPE_SCAN = 500
 RELATED_LIMIT = 10
 RANGE_PRESETS = {"All time": None, "Last hour": timedelta(hours=1), "Last 24 hours": timedelta(hours=24),
                  "Last 7 days": timedelta(days=7), "Last 30 days": timedelta(days=30)}
+RANGE_BUCKET = timedelta(minutes=5)     # relative ranges start on a multiple of this, so reruns build equal filters
 CUSTOM_RANGE = "Custom (UTC dates)"
 _HEX64 = re.compile(r"[0-9a-fA-F]{64}")
 _HOST_CHARS = re.compile(r"[^\s/:@?#]+")
@@ -81,7 +82,11 @@ def time_range(preset: str, now: datetime, start_date=None, end_date=None) -> tu
         end = datetime.combine(end_date + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc) if end_date else None
         return start, end
     span = RANGE_PRESETS.get(preset)
-    return (now - span, None) if span else (None, None)
+    if not span:
+        return None, None
+    # shortcut: a click that straddles a 5-minute boundary still resets paging once; anchor the time in session_state to fix.
+    start = now - span
+    return start - (start - datetime.min.replace(tzinfo=start.tzinfo)) % RANGE_BUCKET, None
 
 
 @dataclass(frozen=True)

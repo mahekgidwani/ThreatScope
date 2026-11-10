@@ -57,6 +57,25 @@ def test_time_range_presets_and_all_time():
     assert ev.time_range("Last hour", NOW)[0] == NOW - timedelta(hours=1)
 
 
+def test_relative_start_is_stable_within_a_bucket():
+    t = datetime(2026, 11, 7, 12, 0, 30, 123456, tzinfo=timezone.utc)
+    for preset in ("Last hour", "Last 24 hours", "Last 7 days", "Last 30 days"):
+        assert ev.time_range(preset, t)[0] == ev.time_range(preset, t + timedelta(seconds=137, microseconds=7))[0], preset
+
+
+def test_relative_start_never_narrows_the_window():
+    t = datetime(2026, 11, 7, 12, 3, 41, 999999, tzinfo=timezone.utc)
+    for preset in ("Last hour", "Last 24 hours", "Last 7 days", "Last 30 days"):
+        start, end = ev.time_range(preset, t)
+        assert end is None
+        assert start <= t - ev.RANGE_PRESETS[preset] and t - ev.RANGE_PRESETS[preset] - start < ev.RANGE_BUCKET, preset
+
+
+def test_relative_start_has_no_microseconds():
+    start = ev.time_range("Last 24 hours", datetime(2026, 11, 7, 12, 3, 41, 999999, tzinfo=timezone.utc))[0]
+    assert (start.second, start.microsecond) == (0, 0) and start.minute % 5 == 0
+
+
 def test_custom_range_is_whole_utc_days_with_the_end_date_included():
     start, end = ev.time_range(ev.CUSTOM_RANGE, NOW, date(2026, 11, 1), date(2026, 11, 3))
     assert start == datetime(2026, 11, 1, tzinfo=timezone.utc) and end == datetime(2026, 11, 4, tzinfo=timezone.utc)

@@ -6,7 +6,7 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from tests.fake_backend import FakeBackend, event, incident, indicator
+from tests.fake_backend import FakeBackend, event, incident, indicator, tick_clock
 
 REAL_CLIENT = httpx.Client
 HARNESS = str(Path(__file__).with_name("harness.py"))
@@ -76,6 +76,18 @@ def test_csv_is_prepared_on_demand_and_resets_when_the_scope_changes(monkeypatch
     assert "Download events CSV" in [d.label for d in at.get("download_button")]
     at.selectbox(key="rp_source").select("file").run()
     assert "Download events CSV" not in [d.label for d in at.get("download_button")] and "Prepare it again" in text(at)
+
+
+def test_csv_download_stays_available_after_prepare(monkeypatch):
+    import views.reports
+    tick_clock(monkeypatch, views.reports)
+    at = run(monkeypatch, backend())
+    at.selectbox(key="rp_range").select("Last 24 hours").run()
+    button(at, "Prepare events CSV").click().run()
+    assert "Ready: 3 of 3 events in scope" in text(at)
+    at.run()                                                # a plain rerun: the relative range must not drift
+    assert "filters changed" not in text(at)
+    assert "Download events CSV" in [d.label for d in at.get("download_button")]
 
 
 def test_custom_range_with_reversed_dates(monkeypatch):
