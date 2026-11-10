@@ -80,3 +80,40 @@ def test_streamlit_is_bound_to_loopback_only():
     settings = "\n".join(line for line in config.splitlines() if not line.lstrip().startswith("#"))
     assert 'address = "127.0.0.1"' in settings and "0.0.0.0" not in settings
     assert "gatherUsageStats = false" in config
+
+
+COMPOSE = DASHBOARD.parent / "docker-compose.yml"
+LOOPBACK = "127.0.0.1:"
+
+
+def published_ports(compose_text: str) -> list[str]:
+    """Every list entry under any `ports:` key, comments dropped and quotes stripped.
+    shortcut: text-based (no PyYAML), so it assumes block-style lists, as docker-compose.yml uses."""
+    found, in_ports, indent = [], False, 0
+    for raw in compose_text.splitlines():
+        line = raw.split(" #")[0].rstrip() if not raw.lstrip().startswith("#") else ""
+        if not line.strip():
+            continue
+        depth = len(line) - len(line.lstrip())
+        if line.strip() == "ports:":
+            in_ports, indent = True, depth
+        elif in_ports and line.lstrip().startswith("- ") and depth >= indent:
+            found.append(line.lstrip()[2:].strip().strip("\"'"))
+        elif in_ports and depth <= indent:
+            in_ports = False
+    return found
+
+
+def test_every_published_port_is_loopback_only():
+    ports = published_ports(COMPOSE.read_text(encoding="utf-8"))
+    assert ports, "docker-compose.yml publishes no ports - the parser or the file changed"
+    assert [p for p in ports if not p.startswith(LOOPBACK)] == []
+
+
+def test_the_port_check_catches_a_public_binding():
+    public = 'services:\n  db:\n    ports:\n      # never 0.0.0.0\n      - "5432:5432"\n      - \'0.0.0.0:8000:8000\'\n'
+    ports = published_ports(public)
+    assert ports == ["5432:5432", "0.0.0.0:8000:8000"]       # the comment line is not a port
+    assert [p for p in ports if not p.startswith(LOOPBACK)] == ports
+    assert published_ports('ports:\n  - "127.0.0.1:8000:8000"  # local\n  - 127.0.0.1:5432:5432\nvolumes:\n  - ./x:/y\n') == [
+        "127.0.0.1:8000:8000", "127.0.0.1:5432:5432"]
