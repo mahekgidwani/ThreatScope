@@ -158,6 +158,30 @@ def test_indicators_endpoint_lists_filters_and_pages(client):
     assert client.get("/api/v1/indicators", params={"limit": 2, "offset": 2}).json()["items"].__len__() == 1
 
 
+def test_indicator_ip_and_domain_values_are_normalised_like_the_events_filters(client):
+    url = "http://Evil.example/Path?q=1"
+    post(client, domain="Example.COM", source_ip="2001:0DB8::1", url=url)
+    post(client, domain="bücher.de")
+    get = lambda **params: client.get("/api/v1/indicators", params=params)   # noqa: E731
+    assert get(type="domain", value="Example.COM").json()["total"] == 1
+    assert get(type="ip", value="2001:0DB8::1").json()["total"] == 1
+    raw = client.get("/api/v1/indicators?type=domain&value=B%C3%BCcher.DE")   # already percent-encoded
+    assert raw.json()["total"] == 1
+    assert get(type="domain", value="Bücher.DE").json()["total"] == 1
+    assert get(type="url", value=url).json()["total"] == 1                  # other types stay exact
+    assert get(type="url", value=url.lower()).json()["total"] == 0
+    assert get(value="Example.COM").json()["total"] == 0                    # no type: exact
+    assert get(value="example.com").json()["total"] == 1
+
+
+@pytest.mark.parametrize("params", [{"type": "ip", "value": "not-an-ip"},
+                                    {"type": "domain", "value": "bad_domain!.com"}])
+def test_indicator_value_that_is_not_a_valid_ip_or_domain_is_422_without_echo(client, params):
+    response = client.get("/api/v1/indicators", params=params)
+    assert response.status_code == 422 and error_code(response) == "invalid_filter"
+    assert params["value"] not in response.text
+
+
 @pytest.mark.parametrize("params", [{"type": "bogus"}, {"limit": 101}, {"offset": -1}])
 def test_indicators_endpoint_rejects_bad_parameters(client, params):
     assert client.get("/api/v1/indicators", params=params).status_code == 422
