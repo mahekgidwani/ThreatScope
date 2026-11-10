@@ -1,0 +1,3 @@
+# brand keywords for the look-alike domain check (fictional demo data)
+paypal
+microsoft

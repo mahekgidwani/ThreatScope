@@ -105,18 +105,20 @@ inside a throw-away container is lost with it; mount a folder for it if incremen
 
 ## 7. A short demo (nothing is stored until the last step)
 
-Demo files live in `backend/demo/` (the only folder the container sees): `keywords.txt`, `domains.txt`, `modsec_audit.log`
-(five attacks, four from `203.0.113.50`) and `note.txt`. All data is fictional (documentation IP ranges, `.example` domains).
+Demo files live in `backend/demo/` (the only folder the container sees): `brands.txt`, `domains.txt`, `modsec_audit.log`
+(five attacks, four from `203.0.113.50`) and `note.txt`. All data is fictional (documentation IP ranges; fictional look-alike names, where `paypa1.com` is a look-alike test name).
+The only indicator shared between demo events is the honeypot IP `203.0.113.50`; the look-alike and file events are evidence only.
 
-1. `docker compose run --rm backend python -m integrations.opensquat_adapter --keywords demo/keywords.txt --domains demo/domains.txt --dry-run`
+1. `docker compose run --rm backend python -m integrations.opensquat_adapter --keywords demo/brands.txt --domains demo/domains.txt --dry-run`
    prints the domain events it would send; lines like `paypa1.com` show the detection logic.
 2. `docker compose run --rm backend python -m integrations.modsec_adapter demo/modsec_audit.log --dry-run` shows the honeypot events
    with attack category, severity and the redacted request summary.
 3. `docker compose run --rm backend python -m integrations.analyse_file demo/note.txt --dry-run` shows the file event with the
    indicators found inside the note.
-4. Run the same commands without `--dry-run`, or all three at once with `.\backend\demo\load-demo.ps1` (from the repo root; `-DryRun`
-   previews). Then open `http://127.0.0.1:8000/docs` and call `GET /api/v1/events?source=...` and `GET /api/v1/indicators`:
-   the repeated attacker IP shows a rising `sighting_count` and a higher `risk_score` (docs/RISK_SCORING.md).
+4. To store them, run all three with `.\backend\demo\load-demo.ps1` (from the repo root; `-DryRun` previews). It adds
+   `-e THREATSCOPE_API_URL=http://backend:8000` so the one-off container reaches the API (see section 6). Then open
+   `http://127.0.0.1:8000/docs` and call `GET /api/v1/events?source=...` and `GET /api/v1/indicators`: the repeated attacker IP shows a
+   rising `sighting_count` and a higher `risk_score` (docs/RISK_SCORING.md).
 5. Run step 4 again: everything is "already recorded".
 
 ## 8. Verification

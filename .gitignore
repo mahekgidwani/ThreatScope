@@ -15,6 +15,7 @@ venv/
 
 # Runtime data
 *.log
+!backend/demo/*.log
 uploads/
 pgdata/
 

@@ -56,7 +56,7 @@ placeholder such as `change-me`, and must not be repetitive; otherwise the API r
 ## Try it
 
 Fastest way to get events on screen: `.\backend\demo\load-demo.ps1` (add `-DryRun` to only print them). It loads fictional demo
-data (look-alike domains, a ModSecurity log with several attacks from one IP, a text note) into the development database;
+data (look-alike domains, a ModSecurity log with several attacks from one IP, a text note; fictional names and documentation IPs) into the development database;
 see `docs/INTEGRATIONS.md` section 7. Or send one event by hand:
 
 ```powershell

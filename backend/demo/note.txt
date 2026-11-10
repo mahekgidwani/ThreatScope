@@ -2,4 +2,4 @@ Demo note for the static file analyser (harmless text, fictional data).
 
 The honeypot saw several probes from 203.0.113.50 on 10 November.
 Follow-up traffic pointed at http://paypa1.com/login and http://microsoft-login.example/update.
-Nothing here is real; it only gives the analyser an IP, a domain and URLs to list.
+Nothing here is real (paypa1.com is a look-alike test name); it only gives the analyser an IP, a domain and URLs to list.

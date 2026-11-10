@@ -16,7 +16,7 @@ if ($LASTEXITCODE -ne 0 -or $running -notcontains 'backend') {
 
 $extra = @()
 if ($DryRun) { $extra = @('--dry-run') }
-$run = @('compose', 'run', '--rm', 'backend', 'python', '-m')
+$run = @('compose', 'run', '--rm', '-e', 'THREATSCOPE_API_URL=http://backend:8000', 'backend', 'python', '-m')
 
 function Invoke-Adapter([string[]]$AdapterArgs) {
     $ErrorActionPreference = 'Continue'   # docker prints progress on stderr, which 'Stop' would treat as a failure
@@ -25,7 +25,7 @@ function Invoke-Adapter([string[]]$AdapterArgs) {
 }
 
 Write-Host "1/3 look-alike domains"
-Invoke-Adapter @('integrations.opensquat_adapter', '--keywords', 'demo/keywords.txt', '--domains', 'demo/domains.txt')
+Invoke-Adapter @('integrations.opensquat_adapter', '--keywords', 'demo/brands.txt', '--domains', 'demo/domains.txt')
 Write-Host "2/3 honeypot (ModSecurity) log"
 Invoke-Adapter @('integrations.modsec_adapter', 'demo/modsec_audit.log')
 Write-Host "3/3 file analysis"

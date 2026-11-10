@@ -16,7 +16,7 @@ DOC_RANGES = [ipaddress.ip_network(n) for n in ("203.0.113.0/24", "198.51.100.0/
 
 
 def demo_events():
-    keywords = [k for k in map(clean_keyword, iter_lines(DEMO / "keywords.txt")) if k]
+    keywords = [k for k in map(clean_keyword, iter_lines(DEMO / "brands.txt")) if k]
     domains = [d for d in map(prepare_domain, iter_lines(DEMO / "domains.txt")) if d]
     events = [squat_event(f) for f in find_squatting(keywords, domains)]
     events += [modsec_event(json.loads(text)) for text in (DEMO / "modsec_audit.log").read_text("utf-8").splitlines() if text]
@@ -42,3 +42,11 @@ def test_demo_files_hold_only_documentation_ips_and_no_key_like_strings():
         assert not re.search(r"[0-9a-fA-F]{24,}", text), path.name
         for ip in re.findall(r"(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?![\w.])", text):
             assert any(ipaddress.ip_address(ip) in net for net in DOC_RANGES), (path.name, ip)
+
+
+def test_demo_files_exist_under_names_git_does_not_ignore():
+    # .gitignore hides *.log (negated for backend/demo) and *key*.txt, so a keywords.txt would vanish
+    # from a clone. git is not in the container image; tracking is checked with `git ls-files backend/demo`.
+    names = {"brands.txt", "domains.txt", "modsec_audit.log", "note.txt", "load-demo.ps1"}
+    assert names <= {p.name for p in DEMO.iterdir()}
+    assert not [n for n in names if "key" in n.lower() and n.endswith(".txt")]
