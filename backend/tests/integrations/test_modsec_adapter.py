@@ -295,6 +295,50 @@ def test_a_connection_failure_keeps_the_failed_line_for_the_next_run(tmp_path, c
     assert len(retry.ids) == 1                         # only the second record is tried again
 
 
+def three_attacks():
+    return [record(transaction_id=f"T{n}", remote=f"198.51.100.{n}") for n in (1, 2, 3)]
+
+
+def line_end(log, count):
+    return len(b"".join(log.read_bytes().splitlines(keepends=True)[:count]))
+
+
+def fail_second(failure):
+    """A handler: the first call is stored, the second fails the given way, a third call must not happen."""
+    seen = Recorder(lambda r: failure(r) if len(seen.ids) == 2 else created(r))
+    return seen
+
+
+@pytest.mark.parametrize("failure", [lambda r: error_reply(503, "unavailable"),
+                                     lambda r: error_reply(500, "internal_error"),
+                                     lambda r: (_ for _ in ()).throw(httpx.ConnectError("refused"))])
+def test_a_retryable_error_stops_the_run_and_keeps_the_failed_line_for_next_time(tmp_path, capsys, failure):
+    log, state = write(tmp_path, "a.log", log_of(*three_attacks())), tmp_path / "state.json"
+    seen = fail_second(failure)
+    code, out, err = run([str(log), "--state", str(state)], capsys, client=fake_client(seen))
+    assert code == 1 and len(seen.ids) == 2                       # line 3 was never sent
+    assert json.loads(state.read_text())["offset"] == line_end(log, 1)
+    assert "Stopping." in err and "Run aborted." in out
+
+
+def test_rerun_after_outage_resumes_at_the_failed_line(tmp_path, capsys):
+    log, state = write(tmp_path, "a.log", log_of(*three_attacks())), tmp_path / "state.json"
+    first = fail_second(lambda r: error_reply(503, "unavailable"))
+    run([str(log), "--state", str(state)], capsys, client=fake_client(first))
+    again = Recorder()
+    code, _, _ = run([str(log), "--state", str(state)], capsys, client=fake_client(again))
+    assert code == 0 and len(again.ids) == 2 and again.ids[0] == first.ids[1] and first.ids[0] not in again.ids
+    assert json.loads(state.read_text())["offset"] == line_end(log, 3)
+
+
+def test_422_is_counted_failed_and_skipped(tmp_path, capsys):
+    log, state = write(tmp_path, "a.log", log_of(*three_attacks())), tmp_path / "state.json"
+    seen = fail_second(lambda r: error_reply(422, "validation_error"))
+    code, out, _ = run([str(log), "--state", str(state)], capsys, client=fake_client(seen))
+    assert code == 1 and len(seen.ids) == 3 and "failed 1" in out and "Run aborted." not in out
+    assert json.loads(state.read_text())["offset"] == line_end(log, 3)
+
+
 def test_max_events_stops_and_the_next_run_continues(tmp_path, capsys):
     log, state = tmp_path / "a.log", tmp_path / "state.json"
     log.write_text(log_of(*[record(transaction_id=f"M{i}", remote=f"198.51.100.{i}") for i in range(1, 6)]))

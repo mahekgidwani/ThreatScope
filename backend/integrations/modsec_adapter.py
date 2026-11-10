@@ -11,7 +11,8 @@ Even without --state nothing is stored twice (event ids come from ModSec transac
 
 Exit code 0 = no problems, 1 = some events failed, 2 = bad usage or configuration. --dry-run prints
 the events (one JSON per line), sends nothing, saves nothing and needs no API key. The run stops at
-once if the key is rejected or the API cannot be reached; that line is retried next time.
+once if the key is rejected, the API cannot be reached, a request times out or the API answers 5xx;
+that line is retried next time. A rejected event (4xx such as 422) is counted as failed and skipped.
 """
 import argparse
 import hashlib
@@ -19,9 +20,7 @@ import json
 import os
 import sys
 
-from integrations.client import (
-    ApiAuthError, ApiConnectionError, ApiTimeoutError, IntegrationError,
-)
+from integrations.client import ApiAuthError, IntegrationError
 from integrations.cli_common import connect, positive_int
 from integrations.config import load_settings
 from integrations.modsec_parser import RecordSkipped, build_event
@@ -165,14 +164,13 @@ def _run(args, client) -> int:
                         stats["failed"] += 1
                         aborted = True
                         break
-                    except (ApiConnectionError, ApiTimeoutError) as exc:
-                        print(f"{exc}. Stopping.", file=sys.stderr)
-                        stats["failed"] += 1
-                        aborted = True
-                        break
                     except IntegrationError as exc:
-                        print(f"line {line_number} of this run: failed - {exc}", file=sys.stderr)
                         stats["failed"] += 1
+                        if exc.retryable:      # connection, timeout, 5xx: stop before `offset = end` so the line is retried
+                            print(f"{exc}. Stopping.", file=sys.stderr)
+                            aborted = True
+                            break
+                        print(f"line {line_number} of this run: failed - {exc}", file=sys.stderr)
                     else:
                         stats["stored" if result.created else "duplicate"] += 1
             offset = end

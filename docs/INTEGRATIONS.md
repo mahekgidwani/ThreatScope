@@ -62,7 +62,7 @@ Inside the backend container the defaults work as they are. No database variable
 | `metadata` | all | structure, evidence and explanation (limit 64 KB; adapters cap their lists to fit) |
 
 Answers: `201` stored, `409 duplicate_event` (a normal result), `401` wrong key (stop), `422` rejected (counted, run goes on),
-`5xx`/timeouts/connection errors (retryable; the run stops and, for logs, the failing line is retried next time).
+`5xx`/timeouts/connection errors (retryable; the run stops and, for the ModSecurity log, the failing line is retried next time).
 The honeypot adapter deliberately sends no `url`, `domain` or `destination_ip`: they would make the honeypot's own address an
 indicator shared by every attack.
 
