@@ -13,7 +13,7 @@ Dashboard (Streamlit, Windows host, 127.0.0.1:8501) -> ts_dashboard.api_client -
 Set-Location path\to\ThreaScope
 docker compose up -d                       # PostgreSQL + API (already running if you did Phase 2/3)
 Set-Location dashboard                     # run from here: the app loads its assets by relative path
-python -m venv .venv                       # Python 3.11 or newer (3.12 recommended)
+python -m venv .venv                       # tested with Python 3.12 (Docker image) and 3.13 (host); older versions are untested
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt            # once: streamlit, plotly, httpx, pydantic, pydantic-settings
 streamlit run app.py --server.address 127.0.0.1   # http://127.0.0.1:8501  (open the root URL, not /events)
@@ -21,8 +21,10 @@ streamlit run app.py --server.address 127.0.0.1   # http://127.0.0.1:8501  (open
 
 Optional configuration (environment or `.env`, same names the adapters use): `THREATSCOPE_API_URL` (default `http://127.0.0.1:8000`),
 `THREATSCOPE_TIMEOUT_SECONDS` (default 10), and `INGEST_API_KEY` (turns on incident editing; without it the dashboard is read-only).
-The key is picked up from `.env` (in `dashboard/` or the project root) automatically. To force read-only, set `INGEST_API_KEY=`
-(empty) in the environment: an environment value wins over `.env`, and an empty one means no key.
+The key is picked up from `.env` (in `dashboard/` or the project root) automatically. To force read-only in PowerShell, run
+`$env:INGEST_API_KEY = ' '` (a single space) before `streamlit run`: an environment value wins over `.env`, and a blank key means no key.
+Do not assign an empty string (`''`): PowerShell then deletes the variable and `.env` is read again.
+The other way is to remove the `INGEST_API_KEY` line from your own `.env`.
 
 ## Tests
 

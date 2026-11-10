@@ -127,15 +127,17 @@ The only indicator shared between demo events is the honeypot IP `203.0.113.50`;
 
 ## 8. Verification
 
+This table is the end of Phase 3. Later phases added tests; the current totals (1288 backend) are in the README and the DEVLOG.
+
 | Layer | Tests |
 |---|---|
-| Phase 2 backend (unchanged) | 685 |
+| Phase 2 backend (unchanged in Phase 3) | 685 |
 | Shared client and settings | 58 |
 | File analyser | 110 |
 | openSquat adapter | 101 |
 | ModSecurity adapter | 144 |
 | Architecture guard + end to end | 49 |
-| **Total** | **1147** (928 without PostgreSQL, 219 PostgreSQL-only; no skips) |
+| **Total at the end of Phase 3** | **1147** (928 without PostgreSQL, 219 PostgreSQL-only; no skips) |
 
 The end-to-end suite starts a **real uvicorn server** on the dedicated `threatscope_test` PostgreSQL database and runs the real
 command lines of all three adapters over HTTP: scores, indicators and sighting counts, re-runs (no duplicates), wrong key,

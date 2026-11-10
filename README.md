@@ -47,7 +47,7 @@ Adapters and the dashboard never touch the database; only the backend does.
 
 - Windows with **Docker Desktop** running, and PowerShell. The API, the adapters and PostgreSQL 16 run in containers
   (Python 3.12 inside), so they need nothing on the host.
-- **Python 3.11 or newer on the host (3.12 recommended)**, only for the dashboard (see [Dashboard](#dashboard)).
+- **Python on the host**, only for the dashboard (see [Dashboard](#dashboard)). Tested with Python 3.12 (the Docker image) and 3.13 (the host); older versions are untested.
 
 ## Setup (once)
 
@@ -135,7 +135,9 @@ streamlit run app.py --server.address 127.0.0.1   # http://127.0.0.1:8501
 ```
 
 The API key is picked up from `.env` (in the project root) automatically, which turns on creating and editing incidents.
-Set `INGEST_API_KEY=` (empty) in the environment to force read-only. Details: [docs/DASHBOARD.md](docs/DASHBOARD.md).
+To force read-only in PowerShell, run `$env:INGEST_API_KEY = ' '` (a single space) before `streamlit run`: an environment value beats `.env`,
+and a blank key means no key. An empty string `''` does not work, because PowerShell then deletes the variable and `.env` is read again.
+Or remove the `INGEST_API_KEY` line from your own `.env`. Details: [docs/DASHBOARD.md](docs/DASHBOARD.md).
 
 ## Tests
 

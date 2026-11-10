@@ -24,7 +24,7 @@ Pydantic 2.14.3, psycopg 3.3.8, pytest 8.4.2, httpx 0.28.1; database PostgreSQL 
 Verified: `docker compose ps` shows `db (healthy)`; `docker compose port db 5432` = `127.0.0.1:5432`;
 the backend container connected to `db` over the compose network (`select 1` returned 1).
 Common errors: Docker engine not running (start Docker Desktop); port 5432 taken (set `POSTGRES_HOST_PORT`).
-Incident: the C: drive filled up while Docker was pulling images, which left Docker's local copy of the
+Incident: on the author's machine the C: drive filled up while Docker was pulling images, which left Docker's local copy of the
 newest Alpine base layer corrupt (`exec format error`, even for a freshly pulled `alpine:latest`). Ruling: use the
 Debian `postgres:16` image instead of `postgres:16-alpine`. Same PostgreSQL major version, larger image. Docker
 Desktop was restarted by the user; no volumes or data were deleted. Only the broken `postgres:16-alpine` and
@@ -451,7 +451,7 @@ What the review found and what was fixed:
   and summary at 5000. The access log prints the path with `repr` quoting so control characters cannot forge log lines.
 - **Tests.** A test pins the compose file to loopback-only ports; every read route is tested for a clean 503 with no leak when the database is down; the dashboard
   tests no longer read the real API key from `.env`.
-- **Documentation.** README prerequisites (Python 3.11+, venv), architecture diagram, dashboard section before Tests, a Known limitations block; this log; NOTICE rows
+- **Documentation.** README prerequisites (Python versions tested, venv), architecture diagram, dashboard section before Tests, a Known limitations block; this log; NOTICE rows
   for Streamlit, Plotly, httpx and the OWASP Core Rule Set; "future" wording about Phase 4 changed to past tense in the scoring docs.
 
 Test totals (Phase 5): backend `docker compose run --rm backend pytest -q` **1288 passed** (SQLite and real PostgreSQL, no skips); dashboard
