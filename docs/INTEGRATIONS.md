@@ -114,7 +114,7 @@ Demo files live in `backend/demo/` (the only folder the container sees): `keywor
    with attack category, severity and the redacted request summary.
 3. `docker compose run --rm backend python -m integrations.analyse_file demo/note.txt --dry-run` shows the file event with the
    indicators found inside the note.
-4. Run the same commands without `--dry-run`, or all three at once with `.ackend\demo\load-demo.ps1` (from the repo root; `-DryRun`
+4. Run the same commands without `--dry-run`, or all three at once with `.\backend\demo\load-demo.ps1` (from the repo root; `-DryRun`
    previews). Then open `http://127.0.0.1:8000/docs` and call `GET /api/v1/events?source=...` and `GET /api/v1/indicators`:
    the repeated attacker IP shows a rising `sighting_count` and a higher `risk_score` (docs/RISK_SCORING.md).
 5. Run step 4 again: everything is "already recorded".
