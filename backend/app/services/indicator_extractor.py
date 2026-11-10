@@ -1,9 +1,8 @@
 """Decide which indicators (things worth correlating) one event mentions. Pure logic, no database."""
-import ipaddress
 from urllib.parse import urlsplit
 
 from app.enums import IndicatorType, Source
-from app.schemas.event import EventIn, normalise_domain
+from app.schemas.event import EventIn, canonical_ip, normalise_domain
 
 Indicator = tuple[IndicatorType, str]
 
@@ -14,7 +13,7 @@ def _host_indicator(url: str) -> Indicator | None:
     if not host:
         return None
     try:
-        return IndicatorType.ip, str(ipaddress.ip_address(host))
+        return IndicatorType.ip, canonical_ip(host)
     except ValueError:
         pass
     try:

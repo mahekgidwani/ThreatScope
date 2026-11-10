@@ -71,6 +71,16 @@ def test_url_with_an_ipv6_host_uses_the_canonical_ip():
     assert got == [(T.url, "http://[2001:0DB8::1]:8080/x"), (T.ip, "2001:db8::1")]
 
 
+@pytest.mark.parametrize("url", ["http://[fe80::1%25eth0]/x", "http://[fe80::1%eth0]/"])
+def test_url_host_with_scope_id_creates_no_ip_indicator(url):
+    assert extract_indicators(ev(url=url)) == [(T.url, url)]
+
+
+def test_url_host_ipv6_is_canonical():
+    got = extract_indicators(ev(url="http://[2001:DB8::1]/"))
+    assert got == [(T.url, "http://[2001:DB8::1]/"), (T.ip, "2001:db8::1")]
+
+
 def test_url_ip_host_equal_to_source_ip_is_listed_once():
     got = extract_indicators(ev(source_ip="203.0.113.9", url="http://203.0.113.9/x"))
     assert got == [(T.ip, "203.0.113.9"), (T.url, "http://203.0.113.9/x")]
