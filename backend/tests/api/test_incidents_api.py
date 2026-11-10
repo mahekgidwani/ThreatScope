@@ -235,3 +235,15 @@ def test_largest_int4_incident_id_that_does_not_exist_is_404(client):
     url = f"{INCIDENTS}/2147483647"
     assert client.get(url).status_code == 404
     assert client.patch(url, json={"status": "closed"}, headers=AUTH).status_code == 404
+
+
+@pytest.mark.parametrize("field, limit", [("title", 200), ("summary", 5000)])
+def test_overlong_title_and_summary_are_422_on_create_and_update(client, trio, field, limit):
+    event_ids = [trio[0]["id"]]
+    over = client.post(INCIDENTS, json={"title": "t", "event_ids": event_ids, field: "a" * (limit + 1)}, headers=AUTH)
+    assert over.status_code == 422 and error_code(over) == "validation_error"
+    assert over.json()["error"]["details"][0]["type"] == "string_too_long"
+    created = make_incident(client, event_ids, **{field: "a" * limit})      # exactly the limit is accepted
+    url = f"{INCIDENTS}/{created['id']}"
+    assert client.patch(url, json={field: "a" * (limit + 1)}, headers=AUTH).status_code == 422
+    assert client.patch(url, json={field: "b" * limit}, headers=AUTH).status_code == 200

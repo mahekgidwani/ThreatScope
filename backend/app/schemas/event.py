@@ -162,9 +162,9 @@ class EventIn(BaseModel):
     source: Source
     event_type: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_.\-]+$")
     occurred_at: datetime
-    source_ip: str | None = None
-    destination_ip: str | None = None
-    domain: str | None = None
+    source_ip: str | None = Field(default=None, max_length=64)
+    destination_ip: str | None = Field(default=None, max_length=64)
+    domain: str | None = Field(default=None, max_length=512)
     url: str | None = None
     file_hash: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{64}$")
     severity: Severity

@@ -56,8 +56,8 @@ class IncidentIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: str
-    summary: str | None = None
+    title: str = Field(max_length=MAX_TITLE)
+    summary: str | None = Field(default=None, max_length=MAX_SUMMARY)
     event_ids: list[UUID] = Field(min_length=1, max_length=MAX_EVENTS_PER_REQUEST)
 
     @field_validator("title")
@@ -76,9 +76,9 @@ class IncidentPatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=MAX_TITLE)
     status: IncidentStatus | None = None
-    summary: str | None = None
+    summary: str | None = Field(default=None, max_length=MAX_SUMMARY)
     add_event_ids: list[UUID] = Field(default_factory=list, max_length=MAX_EVENTS_PER_REQUEST)
     remove_event_ids: list[UUID] = Field(default_factory=list, max_length=MAX_EVENTS_PER_REQUEST)
 

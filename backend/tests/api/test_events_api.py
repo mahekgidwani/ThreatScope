@@ -172,9 +172,51 @@ def test_request_log_has_method_path_status_and_never_the_key_or_query(client, c
     assert "SECRETTOKEN" not in server_logs
     assert TEST_API_KEY not in caplog.text          # the key must not appear in ANY log line
     lines = [r.getMessage() for r in caplog.records if r.name == "app.access"]
-    assert any(line.startswith("POST /api/v1/events 201 ") for line in lines)
-    assert any(line.startswith("GET /api/v1/events 200 ") for line in lines)
-    assert any(line.startswith("POST /api/v1/events 401 ") for line in lines)
+    assert any(line.startswith("POST '/api/v1/events' 201 ") for line in lines)
+    assert any(line.startswith("GET '/api/v1/events' 200 ") for line in lines)
+    assert any(line.startswith("POST '/api/v1/events' 401 ") for line in lines)
+
+
+def test_access_log_does_not_contain_raw_newlines_from_the_path(client, caplog):
+    with caplog.at_level(logging.DEBUG):
+        client.get("/x%0A2026-11-10 12:00:00,000 ERROR app.x forged")
+    lines = [r.getMessage() for r in caplog.records if r.name == "app.access"]
+    assert lines and not any("\n" in line or "\r" in line for line in lines)
+    assert any("\\n2026-11-10" in line for line in lines)      # the escaped form is what gets logged
+
+
+# ---- request size cap (BACK-01) -------------------------------------------------
+
+def test_oversized_body_is_413_with_the_error_envelope(client):
+    from app.main import MAX_REQUEST_BYTES
+    payload = "SECRETPAYLOAD" * (MAX_REQUEST_BYTES // 10)           # > 256 KiB, no API key sent
+    for url, extra in ((URL, {}), ("/api/v1/incidents", {"event_ids": []})):
+        response = client.post(url, json={"title": payload, **extra})
+        assert response.status_code == 413
+        error = error_of(response)
+        assert error["code"] == "payload_too_large"
+        assert "SECRETPAYLOAD" not in response.text
+
+
+def test_a_body_under_the_cap_is_not_a_413(client):
+    # ~200 KiB of metadata passes the size middleware and is refused by max_metadata_bytes (422).
+    response = client.post(URL, json=body(metadata={"k": "x" * 200_000}), headers=AUTH)
+    assert response.status_code == 422
+    assert error_of(response)["code"] == "validation_error"
+
+
+def test_a_non_numeric_content_length_does_not_crash_the_middleware(client):
+    response = client.post(URL, content=b"{}", headers={"Content-Length": "abc", "Content-Type": "application/json"})
+    assert response.status_code != 500
+
+
+@pytest.mark.parametrize("field, limit", [("domain", 512), ("source_ip", 64), ("destination_ip", 64)])
+def test_overlong_event_fields_are_422(client, field, limit):
+    over = client.post(URL, json=body(**{field: "a" * (limit + 1)}), headers=AUTH)
+    assert over.status_code == 422
+    assert error_of(over)["details"][0]["type"] == "string_too_long"
+    at = client.post(URL, json=body(**{field: "a" * limit}), headers=AUTH)   # refused by the existing rules, not the length
+    assert all(d["type"] != "string_too_long" for d in error_of(at)["details"])
 
 
 # ---- review fixes: input the database cannot store must be a 422, never a 500 --
