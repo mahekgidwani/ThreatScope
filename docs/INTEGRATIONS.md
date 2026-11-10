@@ -132,7 +132,7 @@ The only indicator shared between demo events is the honeypot IP `203.0.113.50`;
 
 ## 8. Verification
 
-This table is the end of Phase 3. Later phases added tests; the current totals (1288 backend) are in the README and the DEVLOG.
+This table is the end of Phase 3. Later phases added tests; the current totals (1290 backend) are in the README and the DEVLOG.
 
 | Layer | Tests |
 |---|---|

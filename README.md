@@ -145,7 +145,7 @@ Or remove the `INGEST_API_KEY` line from your own `.env`. Details: [docs/DASHBOA
 ## Tests
 
 ```powershell
-docker compose run --rm backend pytest -q                    # everything: SQLite + real PostgreSQL (1288 tests)
+docker compose run --rm backend pytest -q                    # everything: SQLite + real PostgreSQL (1290 tests)
 docker compose run --rm backend pytest -q -m "not postgres"  # quick loop (SQLite only)
 docker compose run --rm backend pytest -q -m postgres        # PostgreSQL-only tests
 ```
@@ -156,7 +156,7 @@ docker compose run --rm backend pytest -q -m postgres        # PostgreSQL-only t
   create databases unless the name ends in `_test` and differs from the development database.
 - Tests never use the real API key from `.env`.
 - Dashboard tests run on the host: `pip install -r requirements-dev.txt` in `dashboard/`, then `python -m pytest -q`
-  (315 tests; 10 more, marked `live`, need the running stack and are left out by default: `-m live`).
+  (321 tests; 10 more, marked `live`, need the running stack and are left out by default: `-m live`).
 
 ## Security notes
 

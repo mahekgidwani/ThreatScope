@@ -454,8 +454,8 @@ What the review found and what was fixed:
 - **Documentation.** README prerequisites (Python versions tested, venv), architecture diagram, dashboard section before Tests, a Known limitations block; this log; NOTICE rows
   for Streamlit, Plotly, httpx and the OWASP Core Rule Set; "future" wording about Phase 4 changed to past tense in the scoring docs.
 
-Test totals (Phase 5): backend `docker compose run --rm backend pytest -q` **1288 passed** (SQLite and real PostgreSQL, no skips); dashboard
-`cd dashboard; python -m pytest -q` **315 passed**, 10 `live` tests deselected.
+Test totals (Phase 5): backend `docker compose run --rm backend pytest -q` **1290 passed** (SQLite and real PostgreSQL, no skips); dashboard
+`cd dashboard; python -m pytest -q` **321 passed**, 10 `live` tests deselected.
 
 ### Decision record: items found in the review but not fixed (deferred)
 Context: the Phase 5 goal was to fix what could lose data, crash a page, leak a secret or mislead a reader, and to write the rest down.
