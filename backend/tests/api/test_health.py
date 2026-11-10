@@ -2,10 +2,14 @@
 import logging
 import time
 
+import uuid
+
 import pytest
 
+import app.db
 from app.api.deps import get_engine_dep
 from app.db import make_engine
+from tests.conftest import AUTH
 
 SECRET_PASSWORD = "pw-FAKE-health-123"
 DEAD_DATABASE = f"postgresql+psycopg://health_user:{SECRET_PASSWORD}@127.0.0.1:1/health_db"   # port 1: refused
@@ -18,6 +22,32 @@ def dead_database(client):
     client.app.dependency_overrides[get_engine_dep] = lambda: engine
     yield engine
     engine.dispose()
+
+
+EVENT = {"source": "honeypot", "event_type": "xss_attempt", "occurred_at": "2026-11-07T10:00:00Z",
+         "severity": "high", "description": "probe"}
+
+
+@pytest.mark.parametrize("method, path, payload", [
+    ("GET", "/api/v1/events", None),
+    ("GET", f"/api/v1/events/{uuid.uuid4()}", None),
+    ("GET", "/api/v1/indicators", None),
+    ("GET", "/api/v1/incidents", None),
+    ("GET", "/api/v1/incidents/1", None),
+    ("POST", "/api/v1/events", EVENT),
+    ("POST", "/api/v1/incidents", {"title": "Repeated probes", "event_ids": [str(uuid.uuid4())]}),
+], ids=["list-events", "one-event", "list-indicators", "list-incidents", "one-incident", "post-event", "post-incident"])
+def test_database_down_is_a_clean_503_on_every_read_route(client, dead_database, monkeypatch, method, path, payload):
+    monkeypatch.setattr(app.db, "get_engine", lambda: dead_database)       # get_db builds its sessions from this
+    response = client.request(method, path, json=payload, headers=AUTH)
+    assert response.status_code == 503
+    data = response.json()
+    assert set(data) == {"error"} and set(data["error"]) == {"code", "message", "details"}
+    assert data["error"]["code"] == "database_error"
+    text = response.text.lower()
+    for leaked in ("127.0.0.1", "health_db", "health_user", SECRET_PASSWORD, "password", "psycopg", "sqlalchemy",
+                   "traceback", "operationalerror", "select ", "insert ", "from ", "refused"):
+        assert leaked.lower() not in text, leaked
 
 
 def test_ready_when_the_database_answers(client):

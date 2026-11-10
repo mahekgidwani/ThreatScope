@@ -6,6 +6,7 @@ run them with:  python -m pytest -m live -p no:cacheprovider
 If the backend is down they FAIL, never skip: a skipped integration test proves nothing.
 """
 import json
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -104,8 +105,9 @@ def test_reads_are_open_and_writes_need_the_key():
         except urllib.error.HTTPError as error:
             return error.code
     assert status("GET", "/api/v1/incidents") == 200
-    assert status("POST", "/api/v1/incidents", b'{"title":"t","event_ids":["7c27133f-9c0d-4878-a800-5b2278eca1f5"]}') == 401
-    assert status("PATCH", "/api/v1/incidents/1", b'{"status":"closed"}') == 401
+    # Invalid body ({}) on purpose: if auth ever failed open these answer 422 and change nothing in the real data.
+    assert status("POST", "/api/v1/incidents", b"{}") == 401
+    assert status("PATCH", "/api/v1/incidents/1", b"{}") == 401
 
 
 def test_the_real_app_renders_every_page_against_the_real_api():
