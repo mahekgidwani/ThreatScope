@@ -1,4 +1,5 @@
 """POST /api/v1/events and the cross-cutting API behaviour (auth, errors, logging)."""
+import json
 import logging
 import uuid
 
@@ -203,6 +204,20 @@ def test_a_body_under_the_cap_is_not_a_413(client):
     response = client.post(URL, json=body(metadata={"k": "x" * 200_000}), headers=AUTH)
     assert response.status_code == 422
     assert error_of(response)["code"] == "validation_error"
+
+
+def test_a_maximal_legitimate_event_passes_the_size_cap(client):
+    # 4-byte characters are 4 bytes of metadata but 12 on the wire once json.dumps (as the adapter client does)
+    # escapes them to surrogate pairs: the worst legitimate case for the fixed 256 KiB cap.
+    from app.config import get_settings
+    from app.main import MAX_REQUEST_BYTES
+    limit = get_settings().max_metadata_bytes
+    metadata = {"k": "😀" * ((limit - 16) // 4)}
+    assert len(json.dumps(metadata, ensure_ascii=False, separators=(",", ":")).encode()) <= limit
+    wire = json.dumps(body(metadata=metadata), allow_nan=False)
+    assert 128 * 1024 < len(wire) < MAX_REQUEST_BYTES
+    response = client.post(URL, content=wire, headers={**AUTH, "Content-Type": "application/json"})
+    assert response.status_code == 201
 
 
 def test_a_non_numeric_content_length_does_not_crash_the_middleware(client):

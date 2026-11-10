@@ -13,7 +13,10 @@ from app.logging_config import configure_logging
 
 access_log = logging.getLogger("app.access")
 
-MAX_REQUEST_BYTES = 256 * 1024   # a legitimate event is far smaller (metadata alone is capped at 64 KiB)
+# A legitimate event is far smaller (metadata alone is capped at 64 KiB). This is a fixed constant, not a setting:
+# json.dumps escapes a 4-byte character to 12 bytes on the wire, so it must stay above ~3x MAX_METADATA_BYTES
+# or legitimate adapter events start getting 413 if MAX_METADATA_BYTES is raised.
+MAX_REQUEST_BYTES = 256 * 1024
 
 
 def create_app(run_startup: bool = True) -> FastAPI:
