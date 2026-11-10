@@ -69,7 +69,10 @@ placeholder such as `change-me`, and must not be repetitive; otherwise the API r
 
 ## Try it
 
-Fastest way to get events on screen: `.\backend\demo\load-demo.ps1` (add `-DryRun` to only print them). It loads fictional demo
+Fastest way to get events on screen: `.\backend\demo\load-demo.ps1` (add `-DryRun` to only print them). On a fresh Windows
+client PowerShell may refuse to run scripts ("running scripts is disabled on this system"): run
+`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` first (this PowerShell window only), or use
+`powershell -ExecutionPolicy Bypass -File .\backend\demo\load-demo.ps1 [-DryRun]`. It loads fictional demo
 data (look-alike domains, a ModSecurity log with several attacks from one IP, a text note; fictional names and documentation IPs).
 **Without `-DryRun` it writes to the development database**; see `docs/INTEGRATIONS.md` section 7. Or send one event by hand:
 
@@ -129,13 +132,13 @@ The dashboard runs on the host (not in Docker) and needs the API to be running (
 ```powershell
 Set-Location path\to\ThreaScope\dashboard       # run it from this folder: it loads its assets by relative path
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1                    # "running scripts is disabled"? see the execution-policy note under "Try it"
 pip install -r requirements.txt                   # once
 streamlit run app.py --server.address 127.0.0.1   # http://127.0.0.1:8501
 ```
 
 The API key is picked up from `.env` (in the project root) automatically, which turns on creating and editing incidents.
-To force read-only in PowerShell, run `$env:INGEST_API_KEY = ' '` (a single space) before `streamlit run`: an environment value beats `.env`,
+To force read-only in PowerShell, run `$env:INGEST_API_KEY = ' '` (a single space) before `streamlit run` (for this PowerShell window only; the variable disappears when it closes): an environment value beats `.env`,
 and a blank key means no key. An empty string `''` does not work, because PowerShell then deletes the variable and `.env` is read again.
 Or remove the `INGEST_API_KEY` line from your own `.env`. Details: [docs/DASHBOARD.md](docs/DASHBOARD.md).
 
@@ -178,7 +181,7 @@ The full lists are in [docs/DASHBOARD.md](docs/DASHBOARD.md) (dashboard) and [do
 - Correlation in the dashboard reads the newest 1,000 events only; older events are not searched (the page says so).
 - Read endpoints are unauthenticated and there is no TLS: local use only.
 - Request bodies over 256 KiB are refused with 413, but only when the request sends a `Content-Length`; a chunked body without
-  one is not capped.
+  one is not capped. The cap is a fixed constant, not a setting: keep it above about 3x `MAX_METADATA_BYTES` if you raise that.
 - The uvicorn access log prints query strings, and the log redactor does not cover uvicorn's loggers.
 - Risk scores are experimental and not calibrated. Findings are leads, not verdicts.
 - Network monitoring (Zeek) is deferred; the `network` source exists but no adapter feeds it.

@@ -63,7 +63,9 @@ Inside the backend container the defaults work as they are. No database variable
 | `metadata` | all | structure, evidence and explanation (limit 64 KB; adapters cap their lists to fit) |
 
 Answers: `201` stored, `409 duplicate_event` (a normal result), `401` wrong key (stop), `422` rejected (counted, run goes on),
-`5xx`/timeouts/connection errors (retryable; the run stops and, for the ModSecurity log, the failing line is retried next time).
+`5xx`/timeouts/connection errors (retryable). The ModSecurity adapter stops and retries the failing line next time; the openSquat
+adapter stops on connection errors and timeouts but counts a 5xx as failed and goes on; the file analyser counts each one as failed
+and goes on with the next file (only a rejected key stops it). Re-running is safe: event ids are stable, so stored events show as duplicates.
 The honeypot adapter deliberately sends no `url`, `domain` or `destination_ip`: they would make the honeypot's own address an
 indicator shared by every attack.
 
@@ -114,12 +116,15 @@ Demo files live in `backend/demo/` (the only folder the container sees): `brands
 The only indicator shared between demo events is the honeypot IP `203.0.113.50`; the look-alike and file events are evidence only.
 
 1. `docker compose run --rm backend python -m integrations.opensquat_adapter --keywords demo/brands.txt --domains demo/domains.txt --dry-run`
-   prints the domain events it would send; lines like `paypa1.com` show the detection logic.
+   prints the domain events it would send; lines like `paypa1.com` show the detection logic. `rnicrosoft.example` (2 edits from
+   "microsoft") is only flagged with `--confidence 2` or higher; the default level 1 finds 3 of the 6 demo domains.
 2. `docker compose run --rm backend python -m integrations.modsec_adapter demo/modsec_audit.log --dry-run` shows the honeypot events
    with attack category, severity and the redacted request summary.
 3. `docker compose run --rm backend python -m integrations.analyse_file demo/note.txt --dry-run` shows the file event with the
    indicators found inside the note.
-4. To store them, run all three with `.\backend\demo\load-demo.ps1` (from the repo root; `-DryRun` previews). It adds
+4. To store them, run all three with `.\backend\demo\load-demo.ps1` (from the repo root; `-DryRun` previews). If PowerShell says
+   "running scripts is disabled", run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` first (this window only), or use
+   `powershell -ExecutionPolicy Bypass -File .\backend\demo\load-demo.ps1 [-DryRun]`. It adds
    `-e THREATSCOPE_API_URL=http://backend:8000` so the one-off container reaches the API (see section 6). Then open
    `http://127.0.0.1:8000/docs` and call `GET /api/v1/events?source=...` and `GET /api/v1/indicators`: the repeated attacker IP shows a
    rising `sighting_count` and a higher `risk_score` (docs/RISK_SCORING.md).
