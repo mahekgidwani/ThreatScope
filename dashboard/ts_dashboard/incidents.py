@@ -6,6 +6,7 @@ from uuid import UUID
 
 from ts_dashboard.api_client import ThreatScopeApi
 from ts_dashboard.models import INCIDENT_STATUSES, Incident
+from ts_dashboard.redact import redact
 
 PAGE_SIZES = (10, 25, 50)
 MAX_EVENT_IDS = 100                      # the API's limit per request
@@ -67,4 +68,5 @@ def parse_event_ids(text: str) -> tuple[list[str], list[str]]:
 
 def default_title(indicator_type: str, value: str) -> str:
     label = {"ip": "IP address", "domain": "domain", "url": "URL", "sha256": "file hash"}.get(indicator_type, indicator_type)
+    value = redact(value)
     return f"Events sharing {label} {value if len(value) <= 60 else value[:59] + '…'}"

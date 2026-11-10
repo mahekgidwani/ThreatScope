@@ -8,6 +8,7 @@ from ts_dashboard.incidents import (
     MAX_EVENT_IDS, PAGE_SIZES, STATUS_LABELS, default_title, fetch_incident_page, parse_event_ids, status_counts,
 )
 from ts_dashboard.models import INCIDENT_STATUSES
+from ts_dashboard.redact import redact
 from ts_dashboard.theme import INDICATOR_LABELS, SCORE_NOTE
 from views.common import page_header, require_api
 
@@ -132,7 +133,7 @@ def _create_panel(api: ThreatScopeApi) -> None:
             by_id = {k.indicator.id: k for k in clusters}
             chosen = by_id[st.selectbox("Shared indicator", list(by_id), key="ic_cluster",
                                         format_func=lambda v: f"{INDICATOR_LABELS[by_id[v].indicator.type]} · "
-                                        f"{by_id[v].indicator.value[:60]} · {by_id[v].count} events")]
+                                        f"{redact(by_id[v].indicator.value)[:60]} · {by_id[v].count} events")]
             event_ids = [str(e.id) for e in chosen.events[:MAX_EVENT_IDS]]
             suggestion = default_title(chosen.indicator.type, chosen.indicator.value)
             st.markdown(components.note(f"{len(event_ids)} events will be grouped."

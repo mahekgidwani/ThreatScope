@@ -4,6 +4,7 @@ import pytest
 
 from tests.fake_backend import T0, event, indicator
 from ts_dashboard import components as c
+from ts_dashboard import correlation as co
 from ts_dashboard.models import Event, Health, Indicator
 from ts_dashboard.theme import SEVERITY_COLOURS, css
 
@@ -99,3 +100,55 @@ def test_times_far_outside_the_usual_range_format_without_raising():
     assert c.fmt_time(datetime(1, 1, 1, tzinfo=timezone.utc)).endswith("UTC")
     assert "9999" in c.fmt_time(datetime(9999, 6, 1, tzinfo=timezone.utc))
     assert c.fmt_time_short(datetime(1, 1, 1, tzinfo=timezone.utc)).endswith(":00")
+
+
+# ---- credentials inside URLs are never displayed --------------------------------------------------
+
+CRED_URL = "http://admin:hunter2@evil.test/x"
+LEAKY_EVENT = dict(url=CRED_URL, description=f"fetched {CRED_URL}", indicators=[indicator(1, "url", CRED_URL, sightings=2)])
+
+
+def _leaky_event() -> Event:
+    return parsed(**LEAKY_EVENT)
+
+
+def _incident_detail() -> str:
+    from ts_dashboard.models import Incident
+    from tests.fake_backend import incident
+    return c.incident_detail(Incident.model_validate({**incident(1), "summary": f"see {CRED_URL}"}))
+
+
+def _graph() -> str:
+    clusters = co.correlate([_leaky_event(), parsed(**LEAKY_EVENT)])
+    graph = co.build_graph(clusters[0], clusters)
+    return " ".join(n.label + n.hover for n in graph.nodes)
+
+
+def _default_title() -> str:
+    from ts_dashboard.incidents import default_title
+    return default_title("url", CRED_URL)
+
+
+@pytest.mark.parametrize("render", [
+    lambda: c.events_table([_leaky_event()]),
+    lambda: c.high_risk_table([_leaky_event()]),
+    lambda: c.event_detail(_leaky_event()),
+    lambda: c.indicators_table(_leaky_event().indicators),
+    lambda: c.event_indicators_table(_leaky_event()),
+    lambda: c.indicators_full_table(_leaky_event().indicators),
+    lambda: c.indicator_detail(_leaky_event().indicators[0]),
+    lambda: c.clusters_table(co.correlate([_leaky_event(), _leaky_event()])),
+    _incident_detail,
+    _graph,
+    _default_title,
+], ids=["events_table", "high_risk_table", "event_detail", "indicators_table", "event_indicators_table",
+        "indicators_full_table", "indicator_detail", "clusters_table", "incident_detail", "graph", "default_title"])
+def test_credentials_in_urls_are_hidden_everywhere(render):
+    out = render()
+    assert "hunter2" not in out and "admin:" not in out and "[redacted]" in out
+
+
+def test_credentials_are_hidden_before_long_values_are_shortened():
+    long_url = "http://admin:hunter2@" + "a" * 40 + ".test/x"
+    html = c.events_table([parsed(url=long_url)])
+    assert "hunter2" not in html and "admin" not in html

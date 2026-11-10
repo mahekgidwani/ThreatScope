@@ -1,7 +1,7 @@
 """HTML snippets for the dashboard. Pure string builders (no Streamlit), so they can be tested.
 
 SECURITY: event text comes from outside (log lines, file contents, domains an attacker chose). Every
-value that enters HTML goes through `html.escape` here; callers pass raw text, never HTML, except to
+value that enters HTML goes through `html.escape` here (URL credentials are masked first, in cell_text / cell_mono); callers pass raw text, never HTML, except to
 `table()` cells, which must be built by the helpers below (`cell_text`, `cell_mono`, `severity_badge`...).
 """
 from datetime import datetime, timezone
@@ -9,6 +9,7 @@ from html import escape
 from typing import Sequence
 
 from ts_dashboard.models import Event, Health, Incident, Indicator
+from ts_dashboard.redact import redact
 from ts_dashboard.theme import INDICATOR_LABELS, SEVERITY_COLOURS, SEVERITY_LABELS, SOURCE_LABELS
 
 _STATUS_LABELS = {"open": "Open", "investigating": "Investigating", "closed": "Closed"}
@@ -95,10 +96,12 @@ def severity_badge(severity: str) -> str:
 
 
 def cell_text(text: str, limit: int = 0) -> str:
+    text = redact(text)   # before shortening, or a cut could leave half a password
     return escape(short(text, limit) if limit else text)
 
 
 def cell_mono(text: str, limit: int = 0) -> str:
+    text = redact(text)
     return f'<span class="ts-mono">{escape(short(text, limit) if limit else text)}</span>'
 
 

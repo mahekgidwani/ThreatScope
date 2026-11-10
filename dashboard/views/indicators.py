@@ -6,6 +6,7 @@ from ts_dashboard.api_client import ApiError, ThreatScopeApi
 from ts_dashboard.correlation import events_with_indicator, scan_events
 from ts_dashboard.indicators import PAGE_SIZES, SORT_SCAN, SORTS, fetch_indicator_page
 from ts_dashboard.models import INDICATOR_TYPES, Indicator
+from ts_dashboard.redact import redact
 from ts_dashboard.theme import INDICATOR_LABELS
 from views.common import page_header, require_api
 
@@ -97,7 +98,7 @@ def render() -> None:
         by_id = {i.id: i for i in result.items}
         picked = st.selectbox("Inspect an indicator", [None, *by_id], key=f"ix_pick-{hash(signature)}-{result.page}",
                               format_func=lambda v: "Choose an indicator on this page…" if v is None else
-                              f"{INDICATOR_LABELS[by_id[v].type]} · {by_id[v].value[:60]}")
+                              f"{INDICATOR_LABELS[by_id[v].type]} · {redact(by_id[v].value)[:60]}")
         st.markdown(components.note(CAUTION + " " + TIMES), unsafe_allow_html=True)
     if picked:
         _detail(api, by_id[picked])

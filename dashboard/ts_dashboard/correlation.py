@@ -13,6 +13,7 @@ from datetime import datetime
 from ts_dashboard.api_client import ThreatScopeApi
 from ts_dashboard.models import Event, Indicator, SEVERITIES
 from ts_dashboard.paging import fetch_up_to
+from ts_dashboard.redact import redact
 
 EVENT_SCAN = 1000
 MAX_GRAPH_EVENTS = 30
@@ -124,8 +125,9 @@ def build_graph(selected: Cluster, clusters: list[Cluster]) -> Graph:
     edges: list[tuple[str, str]] = []
     for cluster, y in zip(indicator_clusters, ys_ind):
         ind = cluster.indicator
-        nodes.append(Node(f"i{ind.id}", "indicator", ind.value if len(ind.value) <= 28 else ind.value[:27] + "…",
-                          f"{ind.type}: {ind.value}<br>{cluster.count} events in this view · {ind.sighting_count} sightings",
+        value = redact(ind.value)
+        nodes.append(Node(f"i{ind.id}", "indicator", value if len(value) <= 28 else value[:27] + "…",
+                          f"{ind.type}: {value}<br>{cluster.count} events in this view · {ind.sighting_count} sightings",
                           0.0, y))
         edges += [(f"i{ind.id}", f"e{e.id}") for e in cluster.events if e.id in shown_ids]
     for event, y in zip(events, ys_evt):

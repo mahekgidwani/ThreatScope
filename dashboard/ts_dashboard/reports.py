@@ -146,7 +146,7 @@ def fetch_export(api: ThreatScopeApi, scope: EventFilters, limit: int = EXPORT_M
 # ---- Markdown summaries ----------------------------------------------------------------------------------
 
 def _cell(text: object) -> str:
-    return str(text).replace("|", "\\|").replace("\r", " ").replace("\n", " ").strip()
+    return redact(str(text)).replace("|", "\\|").replace("\r", " ").replace("\n", " ").strip()
 
 
 def _table(headers: list[str], rows: list[list[object]]) -> list[str]:
@@ -158,7 +158,7 @@ def _table(headers: list[str], rows: list[list[object]]) -> list[str]:
 def _event_rows(events: list[Event]) -> list[list[object]]:
     rows = []
     for e in events:
-        indicator = e.source_ip or e.domain or e.url or e.file_hash or "none"
+        indicator = redact(e.source_ip or e.domain or e.url or e.file_hash or "none")   # before the cut
         rows.append([str(e.id), _utc(e.occurred_at), e.event_type, SEVERITY_LABELS[e.severity], e.risk_score, indicator[:60]])
     return rows
 

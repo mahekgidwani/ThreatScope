@@ -187,3 +187,37 @@ def test_incident_summary_lists_notes_events_and_shared_indicators():
                      "## Indicators shared by these events", "203.0.113.42", "not a confirmed attack", "not a probability of compromise"):
         assert expected in text, expected
     assert "No notes recorded." in rp.incident_markdown(IncidentDetail.model_validate({**incident(8, "open", "low", ()), "event_count": 1, "events": [event(3)]}), NOW)
+
+
+# ---- credentials inside URLs never reach the Markdown ---------------------------------------------------------
+
+CRED_URL = "http://admin:hunter2@evil.test/x"
+URL_IND = indicator(5, "url", CRED_URL, sightings=3)
+
+
+def _leaky_events():
+    return [event(n, severity="critical", url=CRED_URL, description=f"fetched {CRED_URL}", indicators=[URL_IND]) for n in (1, 2)]
+
+
+def _report_text():
+    backend = FakeBackend(events=_leaky_events(), indicators=[URL_IND])
+    return rp.report_markdown(rp.build_report(api_for(backend), EventFilters(), NOW))
+
+
+def _incident_text():
+    detail = IncidentDetail.model_validate({**incident(1, "open", "critical", ()), "event_count": 2, "title": f"look at {CRED_URL}",
+                                           "summary": f"see {CRED_URL}", "events": _leaky_events()})
+    return rp.incident_markdown(detail, NOW)
+
+
+@pytest.mark.parametrize("render", [_report_text, _incident_text], ids=["report_markdown", "incident_markdown"])
+def test_credentials_in_urls_are_hidden_everywhere(render):
+    text = render()
+    assert "hunter2" not in text and "admin:" not in text and "[redacted]" in text
+
+
+def test_credentials_are_hidden_before_the_indicator_is_cut_to_60_characters():
+    long_url = "http://admin:hunter2@" + "a" * 70 + ".test/x"
+    text = rp.incident_markdown(IncidentDetail.model_validate({**incident(1, "open", "high", ()), "event_count": 1,
+                                                              "events": [event(1, url=long_url)]}), NOW)
+    assert "hunter2" not in text and "admin" not in text
