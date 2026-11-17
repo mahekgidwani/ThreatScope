@@ -28,3 +28,5 @@ pgdata/
 # Design review screenshots (local evidence)
 .impeccable/review/
 .impeccable/mocks/
+
+INPUT_STEPS_NOTES.md
