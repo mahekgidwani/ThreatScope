@@ -14,6 +14,20 @@ in [docs/DEVLOG.md](docs/DEVLOG.md).
 
 > The project folder is spelled `ThreaScope`; the product name is ThreatScope. Nothing is renamed.
 
+## Quick start
+
+With Docker Desktop running and Python installed on the host, one command starts everything:
+
+```powershell
+python program_runner.py
+```
+
+It creates `.env` with random secrets if missing, runs `docker compose up -d --build` (PostgreSQL + API), waits for
+`/health`, installs the dashboard requirements and opens the dashboard at http://127.0.0.1:8501. Ctrl+C stops the
+dashboard only; stop the containers with `docker compose down` (this keeps your data). Then load demo events with
+`.\backend\demo\load-demo.ps1` (see [Try it](#try-it)). The manual steps are under [Setup](#setup-once) and
+[Dashboard](#dashboard).
+
 ## Architecture
 
 ```
@@ -223,6 +237,7 @@ backend/demo/       fictional demo data + load-demo.ps1
 backend/tests/      unit/  db/  api/  integrations/      (SQLite + PostgreSQL)
 dashboard/          Streamlit dashboard (Phase 4): app.py  views/  ts_dashboard/  tests/
 docs/               DASHBOARD.md  INTEGRATIONS.md  NETWORK_DECISION.md  PHASE1_AUDIT.md  DEVLOG.md  RISK_SCORING.md  superpowers/
+program_runner.py   one-command launcher: Docker stack + dashboard
 PRODUCT.md  DESIGN.md   what the dashboard is for, and its design rules
 third_party/NOTICE.md   attribution
 ```
