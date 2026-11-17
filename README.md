@@ -1,16 +1,24 @@
 # ThreatScope
 
-Unified cyber threat detection and monitoring platform (college project). It collects security events from
-domain-squatting detection, a web honeypot, file analysis and network monitoring into **one PostgreSQL database**
-behind a **FastAPI** backend.
+A unified cyber threat detection and monitoring platform (college project). It brings security events from several
+sources into **one PostgreSQL database** behind a **FastAPI** backend, scores them, pulls out indicators (IPs, domains,
+URLs, file hashes) and shows everything in a **Streamlit dashboard**.
 
-**Status: Phase 4 (dashboard) implemented on top of Phase 3 (integrations, three of four sources), followed by a Phase 5 review-and-fix pass.** The API stores, scores and serves events, and
-adapters now collect them from **file analysis, domain look-alike detection (openSquat-derived) and a ModSecurity web
-honeypot log**. Network monitoring was evaluated (Zeek) and deferred. See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+**Status: working local MVP, three of four planned sources connected.**
 
-**Phase 4 adds a browser dashboard** (Streamlit, `dashboard/`): overview, event explorer, indicators, correlation, incident
-management and reports, read through the API. See [docs/DASHBOARD.md](docs/DASHBOARD.md). What the Phase 5 review found and fixed is
-in [docs/DEVLOG.md](docs/DEVLOG.md).
+| Source | State |
+|---|---|
+| File analysis (static, nothing is executed) | Working |
+| Domain look-alike detection (openSquat-derived) | Working |
+| Web honeypot (ModSecurity audit log) | Working |
+| Network monitoring (Zeek) | Evaluated and deferred; the `network` source exists but no adapter feeds it |
+
+The API stores, scores and serves events. The dashboard offers an overview, event explorer, indicators, correlation,
+incident management and reports. Risk scores are experimental, and findings are leads, not verdicts. It is built for
+local use only (see [Security notes](#security-notes)).
+
+More detail: [adapters](docs/INTEGRATIONS.md), [dashboard](docs/DASHBOARD.md), and the build history and review
+fixes in [docs/DEVLOG.md](docs/DEVLOG.md).
 
 > The project folder is spelled `ThreaScope`; the product name is ThreatScope. Nothing is renamed.
 
